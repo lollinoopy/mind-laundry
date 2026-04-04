@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>마음 세탁소 | Mind Laundry</title>
+    <style>
+        :root { --bg: #f4f7f6; --paper: #ffffff; --accent: #ff6b6b; --text: #333; }
+        body { 
+            background-color: var(--bg); margin: 0; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; height: 100vh; 
+            font-family: 'Malgun Gothic', sans-serif; overflow: hidden; touch-action: none;
+        }
+
+        /* 메인 컨테이너 */
+        #laundry-bin {
+            position: relative; width: 320px; height: 450px;
+            background: var(--paper); box-shadow: 0 15px 50px rgba(0,0,0,0.1);
+            border-radius: 4px; overflow: visible;
+        }
+
+        /* [1단계] 글쓰기 영역 */
+        #text-input {
+            width: 100%; height: 100%; border: none; padding: 30px;
+            font-size: 18px; line-height: 1.8; resize: none; box-sizing: border-box;
+            outline: none; background: repeating-linear-gradient(white, white 35px, #f0f0f0 36px);
+            color: var(--text); position: absolute; top:0; left:0; z-index: 10;
+        }
+
+        /* [2단계] 고정 효과 */
+        .paper-fixed #text-input { visibility: hidden; }
+        
+        /* [4단계] 파괴용 효과 */
+        #erase-layer { position: absolute; top: 0; left: 0; z-index: 50; display: none; touch-action: none; }
+        .tear-piece { position: absolute; top: 0; width: 50%; height: 100%; background: white; z-index: 60; pointer-events: none; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+
+        /* 하단 컨트롤 영역 */
+        .controls { margin-top: 30px; z-index: 100; text-align: center; }
+        #btn-complete {
+            padding: 15px 40px; border: none; border-radius: 30px;
+            background: var(--accent); color: white; font-weight: bold; font-size: 1.1rem;
+            cursor: pointer; box-shadow: 0 5px 15px rgba(255,107,107,0.3); transition: 0.2s;
+        }
+
+        /* [3단계] 옵션 선택창 */
+        #options-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: center; z-index: 200;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        #options-modal.show { display: flex; opacity: 1; }
+        
+        .modal-content {
+            background: white; padding: 30px; border-radius: 15px; text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2); width: 280px;
+        }
+        .modal-content h2 { font-size: 1.2rem; margin-top: 0; color: #444; }
+        .option-list { display: flex; flex-direction: column; gap: 12px; margin-top: 25px; }
+        
+        .option-btn {
+            padding: 12px; border: 1px solid #ddd; border-radius: 8px;
+            background: #f9f9f9; color: #555; font-size: 1rem; font-weight: bold;
+            cursor: pointer; transition: 0.2s; text-align: left; padding-left: 20px;
+        }
+        .option-btn:hover { background: #eee; transform: translateX(3px); }
+
+        /* 애니메이션 */
+        @keyframes ripLeft { to { transform: translateX(-150%) rotate(-25deg); opacity: 0; } }
+        @keyframes ripRight { to { transform: translateX(150%) rotate(25deg); opacity: 0; } }
+        @keyframes burnAway { 
+            0% { filter: brightness(1); opacity: 1; }
+            100% { filter: brightness(0) blur(10px); opacity: 0; transform: scale(0.8); }
+        }
+        @keyframes throwTrash {
+            to { transform: scale(0.1) rotate(720deg) translate(500px, 800px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="laundry-bin">
+        <textarea id="text-input" placeholder="잊고 싶은 기억을 여기에 털어놓으세요..."></textarea>
+        <canvas id="erase-layer"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="btn-complete" onclick="completeWriting()">✍️ 작성 완료</button>
+    </div>
+
+    <div id="options-modal">
+        <div class="modal-content">
+            <h2>이 기억을 어떻게 처리할까요?</h2>
+            <div class="option-list">
+                <button class="option-btn" onclick="selectOption('tear')">✂️ 1. 시원하게 찢기</button>
+                <button class="option-btn" onclick="selectOption('erase')">🧽 2. 깨끗이 지우기</button>
+                <button class="option-btn" onclick="selectOption('burn')">🔥 3. 불태워 버리기</button>
+                <button class="option-btn" onclick="selectOption('trash')">🗑️ 4. 쓰레기통에 던지기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('erase-layer');
+        const ctx = canvas.getContext('2d');
+        const input = document.getElementById('text-input');
+        const bin = document.getElementById('laundry-bin');
+        const modal = document.getElementById('options-modal');
+        const btnComplete = document.getElementById('btn-complete');
+        let isDrawing = false;
+        let startX = 0;
+        let selectedAction = null;
+
+        window.onload = () => {
+            canvas.width = bin.offsetWidth;
+            canvas.height = bin.offsetHeight;
+        };
+
+        function completeWriting() {
+            if(input.value.trim() === "") return alert("내용을 입력해주세요.");
+            btnComplete.style.display = 'none';
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#333";
+            ctx.font = "18px sans-serif";
+            const lines = input.value.split('\n');
+            lines.forEach((line, i) => ctx.fillText(line, 25, 50 + (i * 35)));
+            input.style.visibility = 'hidden';
+            bin.classList.add('paper-fixed');
+            setTimeout(() => modal.classList.add('show'), 600);
+        }
+
+        function selectOption(option) {
+            selectedAction = option;
+            modal.classList.remove('show');
+            if(option === 'erase') {
+                canvas.style.display = 'block';
+                alert("손가락으로 문질러서 지워보세요.");
+            } else if(option === 'tear') {
+                alert("옆으로 밀어서 찢어보세요.");
+            } else if(option === 'burn') {
+                executeBurn();
+            } else if(option === 'trash') {
+                executeTrash();
+            }
+        }
+
+        function getPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: clientX - rect.left, y: clientY - rect.top };
+        }
+
+        function startAction(e) { 
+            if(!selectedAction) return;
+            if(e.type === 'touchstart') e.preventDefault();
+            isDrawing = true; 
+            if(selectedAction === 'tear') startX = (e.touches ? e.touches[0].clientX : e.clientX);
+        }
+
+        function moveAction(e) {
+            if(!isDrawing || selectedAction !== 'erase') return;
+            if(e.cancelable) e.preventDefault();
+            const pos = getPos(e);
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 25, 0, Math.PI * 2);
+            ctx.fill();
+            clearTimeout(window.timer);
+            window.timer = setTimeout(() => { if(selectedAction==='erase') finalize("깨끗해졌습니다."); }, 2500);
+        }
+
+        function endAction(e) {
+            if(!isDrawing) return;
+            isDrawing = false;
+            if(selectedAction === 'tear') {
+                let endX = (e.changedTouches ? e.changedTouches[0].clientX : e.clientX);
+                if(Math.abs(startX - endX) > 80) executeTear();
+            }
+        }
+
+        [canvas, bin].forEach(el => {
+            el.addEventListener('mousedown', startAction);
+            el.addEventListener('touchstart', startAction, {passive: false});
+            window.addEventListener('mousemove', moveAction, {passive: false});
+            window.addEventListener('touchmove', moveAction, {passive: false});
+            window.addEventListener('mouseup', endAction);
+            window.addEventListener('touchend', endAction);
+        });
+
+        function executeTear() {
+            selectedAction = null;
+            bin.style.background = "transparent";
+            bin.style.boxShadow = "none";
+            const left = document.createElement('div');
+            left.className = 'tear-piece';
+            left.style.left = '0';
+            left.style.clipPath = 'polygon(0 0, 100% 0, 85% 100%, 0 100%)';
+            left.style.animation = 'ripLeft 1s forwards';
+            const right = document.createElement('div');
+            right.className = 'tear-piece';
+            right.style.left = '50%';
+            right.style.clipPath = 'polygon(15% 0, 100% 0, 100% 100%, 0 100%)';
+            right.style.animation = 'ripRight 1s forwards';
+            bin.appendChild(left);
+            bin.appendChild(right);
+            finalize("찢어 버렸습니다.");
+        }
+
+        function executeBurn() {
+            selectedAction = null;
+            bin.style.animation = 'burnAway 1.5s forwards';
+            finalize("태워 버렸습니다.");
+        }
+
+        function executeTrash() {
+            selectedAction = null;
+            bin.style.animation = 'throwTrash 1s forwards';
+            finalize("버렸습니다.");
+        }
+
+        function finalize(msg) {
+            setTimeout(() => {
+                alert(msg + "\n마음이 가벼워지셨길 바랍니다.");
+                location.reload();
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
