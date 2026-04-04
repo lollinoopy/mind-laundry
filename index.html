@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>마음 세탁소 | Mind Laundry</title>
+    <style>
+        :root { --bg: #fdfbf7; --paper: #ffffff; --accent: #ff6b6b; }
+        body { 
+            background-color: var(--bg); margin: 0; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center; height: 100vh; 
+            font-family: 'Malgun Gothic', sans-serif; overflow: hidden; touch-action: none;
+        }
+        h1 { color: #4a4a4a; font-size: 1.2rem; margin-bottom: 20px; pointer-events: none; }
+
+        /* 게임 컨테이너 */
+        #laundry-bin {
+            position: relative; width: 90vw; max-width: 350px; height: 450px;
+            background: var(--paper); box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            border-radius: 2px; transition: transform 0.5s;
+        }
+
+        /* 글쓰기 영역 */
+        #text-input {
+            width: 100%; height: 100%; border: none; padding: 30px;
+            font-size: 1.1rem; line-height: 1.8; resize: none; box-sizing: border-box;
+            outline: none; background: repeating-linear-gradient(white, white 34px, #f0f0f0 35px);
+            color: #333; z-index: 1; position: absolute;
+        }
+
+        /* 지우개 전용 캔버스 */
+        #erase-layer {
+            position: absolute; top: 0; left: 0; z-index: 10;
+            display: none; cursor: crosshair;
+        }
+
+        /* 찢기 애니메이션 조각 */
+        .tear-piece {
+            position: absolute; top: 0; width: 50%; height: 100%;
+            background: white; pointer-events: none; z-index: 20;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        /* 메뉴 */
+        .controls {
+            margin-top: 30px; display: flex; gap: 10px; z-index: 100;
+        }
+        button {
+            padding: 12px 20px; border: none; border-radius: 25px;
+            background: #fff; color: #555; font-weight: bold;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: 0.2s; -webkit-tap-highlight-color: transparent;
+        }
+        button.active { background: var(--accent); color: white; }
+
+        /* 애니메이션 */
+        @keyframes ripLeft { to { transform: translateX(-150%) rotate(-20deg); opacity: 0; } }
+        @keyframes ripRight { to { transform: translateX(150%) rotate(20deg); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <h1>비우고 싶은 마음을 적어주세요</h1>
+
+    <div id="laundry-bin">
+        <textarea id="text-input" placeholder="여기에 당신의 기억을 채우세요..."></textarea>
+        <canvas id="erase-layer"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="btn-write" class="active" onclick="changeMode('write')">✍️ 쓰기</button>
+        <button id="btn-erase" onclick="changeMode('erase')">🧽 지우기</button>
+        <button id="btn-tear" onclick="changeMode('tear')">✂️ 찢기</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('erase-layer');
+        const ctx = canvas.getContext('2d');
+        const input = document.getElementById('text-input');
+        const bin = document.getElementById('laundry-bin');
+        let mode = 'write';
+        let isDrawing = false;
+
+        // 크기 최적화
+        function resize() {
+            canvas.width = bin.offsetWidth;
+            canvas.height = bin.offsetHeight;
+        }
+        window.onload = resize;
+
+        function changeMode(m) {
+            mode = m;
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-' + m).classList.add('active');
+            
+            if(m === 'erase') {
+                canvas.style.display = 'block';
+                input.readOnly = true;
+                // 현재 텍스트를 캔버스에 그림으로 그림
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#333";
+                ctx.font = "18px 'Malgun Gothic'";
+                const lines = input.value.split('\n');
+                lines.forEach((line, i) => ctx.fillText(line, 30, 55 + (i * 35)));
+                input.style.visibility = 'hidden';
+            } else {
+                canvas.style.display = 'none';
+                input.style.visibility = 'visible';
+                input.readOnly = false;
+            }
+        }
+
+        // --- 지우기 기능 (Panning) ---
+        function handleStart() { isDrawing = true; }
+        function handleEnd() { isDrawing = false; }
+        function handleMove(e) {
+            if(!isDrawing || mode !== 'erase') return;
+            const rect = canvas.getBoundingClientRect();
+            const x = (e.clientX || e.touches[0].clientX) - rect.left;
+            const y = (e.clientY || e.touches[0].clientY) - rect.top;
+            
+            ctx.globalCompositeOperation = 'destination-out';
+            ctx.beginPath();
+            ctx.arc(x, y, 25, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        canvas.addEventListener('mousedown', handleStart);
+        canvas.addEventListener('touchstart', handleStart);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchend', handleEnd);
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('touchmove', handleMove);
+
+        // --- 찢기 기능 (Swipe/Pinch 제스처 대용) ---
+        let startX = 0;
+        bin.addEventListener('touchstart', (e) => {
+            if(mode === 'tear' && e.touches.length > 0) startX = e.touches[0].clientX;
+        });
+
+        bin.addEventListener('touchend', (e) => {
+            if(mode === 'tear') {
+                let endX = e.changedTouches[0].clientX;
+                if(Math.abs(startX - endX) > 100) { // 100픽셀 이상 밀면 찢어짐
+                    executeTear();
+                }
+            }
+        });
+
+        function executeTear() {
+            bin.style.background = "transparent";
+            bin.style.boxShadow = "none";
+            input.style.display = "none";
+            
+            const left = document.createElement('div');
+            left.className = 'tear-piece';
