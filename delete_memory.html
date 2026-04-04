@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>마음 세탁소 - 직접 지우기</title>
+    <style>
+        body {
+            background-color: #f7f7f7;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; margin: 0; font-family: 'Nanum Pen Script', sans-serif;
+            touch-action: none; /* 브라우저 기본 스크롤 방지 */
+        }
+        h1 { color: #444; margin-bottom: 20px; pointer-events: none; }
+        
+        #game-container {
+            position: relative; width: 320px; height: 400px;
+            background: white; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        /* 텍스트를 입력하는 곳 */
+        #text-input {
+            width: 100%; height: 100%; border: none; padding: 20px;
+            font-size: 20px; line-height: 1.5; resize: none; box-sizing: border-box;
+            outline: none; z-index: 1; position: absolute;
+        }
+
+        /* 지우개 효과를 위한 캔버스 (입력창 위에 덮음) */
+        #erase-canvas {
+            position: absolute; top: 0; left: 0; z-index: 5;
+            cursor: crosshair; display: none; /* 지우기 모드일 때만 나타남 */
+        }
+
+        .menu { margin-top: 30px; display: flex; gap: 10px; }
+        button {
+            padding: 10px 20px; border: none; border-radius: 20px;
+            background: #333; color: white; cursor: pointer;
+        }
+        .active { background: #ff6b6b; }
+
+        /* 찢어지는 애니메이션 */
+        .tear-left { animation: tearLeft 1s forwards; }
+        .tear-right { animation: tearRight 1s forwards; }
+        @keyframes tearLeft { to { transform: translateX(-200px) rotate(-15deg); opacity: 0; } }
+        @keyframes tearRight { to { transform: translateX(200px) rotate(15deg); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <h1>비우고 싶은 기억을 적고 도구를 선택하세요</h1>
+
+    <div id="game-container">
+        <textarea id="text-input" placeholder="여기에 내용을 가득 적으세요..."></textarea>
+        <canvas id="erase-canvas"></canvas>
+    </div>
+
+    <div class="menu">
+        <button id="mode-write" class="active" onclick="setMode('write')">✍️ 쓰기</button>
+        <button id="mode-erase" onclick="setMode('erase')">🧽 지우개</button>
+        <button id="mode-tear" onclick="setMode('tear')">✂️ 찢기</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('erase-canvas');
+        const ctx = canvas.getContext('2d');
+        const input = document.getElementById('text-input');
+        const container = document.getElementById('game-container');
+        let mode = 'write';
+        let isDrawing = false;
+
+        // 캔버스 크기 설정
+        canvas.width = 320;
+        canvas.height = 400;
+
+        function setMode(newMode) {
+            mode = newMode;
+            document.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+            document.getElementById('mode-' + newMode).classList.add('active');
+
+            if(mode === 'erase') {
+                prepareErase();
+            } else if(mode === 'tear') {
+                canvas.style.display = 'none';
+                input.readOnly = true;
+            } else {
+                canvas.style.display = 'none';
+                input.readOnly = false;
+            }
+        }
+
+        // --- 지우개 로직 (Panning) ---
+        function prepareErase() {
+            canvas.style.display = 'block';
+            // 현재 입력된 텍스트를 캔버스에 "그림"으로 복제합니다.
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "black";
+            ctx.font = "20px Nanum Pen Script";
+            
+            const lines = input.value.split('\n');
+            lines.forEach((line, i) => {
+                ctx.fillText(line, 20, 40 + (i * 30));
+            });
+            input.style.color = "transparent"; // 원본 텍스트는 숨김
+        }
+
+        function erase(x, y) {
+            if(!isDrawing || mode !== 'erase') return;
+            ctx.globalCompositeOperation = 'destination-out'; // 문지르는 곳을 투명하게 만듦
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // --- 찢기 로직 (Pinch/Swipe) ---
+        let startX = 0;
+        container.addEventListener('touchstart', (e) => {
+            if(mode === 'tear') startX = e.touches[0].clientX;
+        });
+
+        container.addEventListener('touchend', (e) => {
+            if(mode === 'tear') {
+                let endX = e.changedTouches[0].clientX;
+                if(Math.abs(startX - endX) > 50) { // 일정 거리 이상 드래그하면 찢어짐
+                    performTear();
+                }
+            }
+        });
+
+        function performTear() {
+            container.style.boxShadow = "none";
+            container.style.background = "transparent";
+            const leftPart = input.cloneNode(true);
+            const rightPart = input.cloneNode(true);
+            
+            leftPart.className = "tear-left";
+            rightPart.className = "tear-right";
+            
+            input.style.display = 'none';
+            container.appendChild(leftPart);
+            container.appendChild(rightPart);
+            
+            setTimeout(() => {
+                alert("기억을 찢어 버렸습니다.");
+                location.reload(); // 리셋
+            }, 1000);
+        }
+
+        // --- 마우스 및 터치 이벤트 연결 ---
+        canvas.addEventListener('mousedown', () => isDrawing = true);
+        window.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            erase(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            erase(touch.clientX - rect.left, touch.clientY - rect.top);
+        });
+
+    </script>
+</body>
+</html>
