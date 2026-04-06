@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>감정쓰레기통🗑️ - 구겨서 던지기 게임</title>
+    <style>
+        @font-face {
+            font-family: 'InkLiquid';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/InkLipquid.woff') format('woff');
+            font-weight: normal;
+            font-display: swap;
+        }
+
+        :root { --bg: #fdf1e8; --text-main: #5d5d5d; --accent: #ff5252; }
+        body { 
+            background-color: var(--bg); margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        .page { 
+            position: absolute; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s, visibility 0.5s; 
+        }
+
+        #start-page { z-index: 10; opacity: 1; visibility: visible; }
+        .description-box { width: 80%; max-width: 400px; text-align: center; color: var(--text-main); line-height: 1.7; font-size: 0.95rem;}
+
+        #game-page { z-index: 5; opacity: 0; visibility: hidden; }
+        
+        #canvas-container {
+            position: relative; width: 320px; height: 450px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.1); border-radius: 4px;
+            background-color: white;
+            background-image: repeating-linear-gradient(transparent, transparent 39px, #e0e0e0 39px, #e0e0e0 40px);
+            overflow: hidden; transition: background 0.5s, box-shadow 0.5s;
+        }
+        
+        canvas { position: absolute; top: 0; left: 0; cursor: crosshair; background: transparent; }
+        
+        #text-input {
+            position: absolute; width: 100%; height: 100%; border: none; 
+            padding: 8px 25px; 
+            font-family: 'InkLiquid', sans-serif; font-size: 22px; line-height: 40px; 
+            word-break: break-all; resize: none; box-sizing: border-box; outline: none; 
+            background: transparent; color: var(--text-main); z-index: 1; border-radius: 4px;
+        }
+        #text-input::placeholder { color: #bbb; }
+
+        .submit-btn {
+            margin-top: 30px; padding: 15px 40px; border: none; border-radius: 30px; 
+            background: var(--accent); color: white; font-weight: bold; font-size: 1.1rem; 
+            cursor: pointer; box-shadow: 0 6px 15px rgba(255, 82, 82, 0.3); transition: 0.2s; z-index: 10;
+        }
+
+        #options-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); display: none;
+            justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 20px; text-align: center;
+            width: 280px; box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        }
+        .option-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .option-btn {
+            padding: 12px; border: 1px solid #eee; border-radius: 10px;
+            background: #fff; font-weight: bold; cursor: pointer; color: #555; transition: 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-page" class="page">
+        <h1>감정쓰레기통</h1>
+        <div style="font-size: 6rem; cursor: pointer; margin-bottom: 30px;" onclick="goToGamePage()">🗑️</div>
+        <div class="description-box">
+            <p>버리고 싶은 기억을 던지세요.<br>당신의 마음이 가벼워질 때까지.</p>
+        </div>
+    </div>
+
+    <div id="game-page" class="page">
+        <div id="canvas-container">
+            <textarea id="text-input" placeholder="없애고 싶은 생각이나 감정을 이 곳에 털어 놓으세요. 작성한 내용은 저장되지 않습니다."></textarea>
+            <canvas id="main-canvas"></canvas>
+            <canvas id="hidden-texture" style="display:none;"></canvas>
+            <canvas id="crease-hidden" style="display:none;"></canvas>
+        </div>
+        <button id="btn-submit" class="submit-btn" onclick="completeWriting()">✍️ 작성 완료</button>
+    </div>
+
+    <div id="options-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color:#444;">이 기억을 어떻게 처리할까요?</h3>
+            <div class="option-list">
+                <button class="option-btn" onclick="selectAction('tear')">✂️ 1. 산산조각 내기</button>
+                <button class="option-btn" onclick="selectAction('erase')">🧽 2. 글자만 지우기</button>
+                <button class="option-btn" onclick="selectAction('burn_ready')">🔥 3. 불태워 버리기</button>
+                <button class="option-btn" onclick="selectAction('basketball_prep')">🏀 4. 구겨서 던지기</button>
+                <button class="option-btn" onclick="selectAction('trash')">🗑️ 5. 바로 버리기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 유틸리티: 다각형 절단 엔진 ---
+        const PolygonClipper = (() => {
+            const getIntersection = (A, B, C, D) => {
+                const a1 = B.y - A.y; const b1 = A.x - B.x; const c1 = a1 * A.x + b1 * A.y;
+                const a2 = D.y - C.y; const b2 = C.x - D.x; const c2 = a2 * C.x + b2 * C.y;
+                const det = a1 * b2 - a2 * b1;
+                if (det === 0) return null;
+                const x = (b2 * c1 - b1 * c2) / det;
+                const y = (a1 * c2 - a2 * c1) / det;
+                if (x >= Math.min(C.x, D.x) - 0.1 && x <= Math.max(C.x, D.x) + 0.1 && y >= Math.min(C.y, D.y) - 0.1 && y <= Math.max(C.y, D.y) + 0.1) return {x, y};
+                return null;
+            };
+            const splitPolygon = (vertices, A, B) => {
+                const p1 = [], p2 = [];
+                for (let i = 0; i < vertices.length; i++) {
+                    const cur = vertices[i]; const next = vertices[(i + 1) % vertices.length];
+                    const side = (B.x - A.x) * (cur.y - A.y) - (B.y - A.y) * (cur.x - A.x);
+                    if (side >= 0) p1.push(cur); if (side <= 0) p2.push(cur); 
+                    const intersect = getIntersection(A, B, cur, next);
+                    if (intersect) { p1.push(intersect); p2.push(intersect); }
+                }
+                return (p1.length >= 3 && p2.length >= 3) ? [p1, p2] : null;
+            };
+            return { splitPolygon };
+        })();
+
+        // --- 물리 객체: 종이 조각 ---
+        class PaperPiece {
+            constructor(vertices, dx = 0, dy = 0, vx = 0, vy = 0) {
+                this.vertices = vertices; this.dx = dx; this.dy = dy;
+                this.vx = vx; this.vy = vy; this.alpha = 1; this.delay = 120;
+            }
+            update() {
+                if(this.vx === 0 && this.vy === 0) return;
+                this.delay--;
+                if (this.delay <= 0) { this.vy += 0.02; this.alpha -= 0.003; } 
+                else { this.vx *= 0.88; this.vy *= 0.88; }
+                const cx = 160 + this.dx; const cy = 225 + this.dy;
+                if (cx < 20 || cx > 300) this.vx *= -0.5;
+                if (cy < 20) this.vy *= -0.5;
+                this.dx += this.vx; this.dy += this.vy;
+            }
+            draw(ctx, tex) {
+                if (this.alpha <= 0) return; ctx.save(); ctx.globalAlpha = this.alpha;
+                ctx.translate(this.dx, this.dy); ctx.beginPath();
+                this.vertices.forEach((v, i) => i === 0 ? ctx.moveTo(v.x, v.y) : ctx.lineTo(v.x, v.y));
+                ctx.closePath(); ctx.clip(); ctx.drawImage(tex, 0, 0);
+                ctx.strokeStyle = "rgba(0,0,0,0.08)"; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+            }
+        }
+
+        // --- 전역 변수 및 초기화 ---
+        const mainCanvas = document.getElementById('main-canvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const textureCanvas = document.getElementById('hidden-texture');
+        const textureCtx = textureCanvas.getContext('2d');
+        const creaseCanvas = document.getElementById('crease-hidden');
+        const creaseCtx = creaseCanvas.getContext('2d');
+        const input = document.getElementById('text-input');
+        const modal = document.getElementById('options-modal');
+        const cw = 320, ch = 450;
+        
+        let selectedAction = null; let isDrawing = false; let swipeTrail = []; let swipeStartX = 0, swipeStartY = 0; let swipeCurrY = 0;
+        let paperPieces = []; let isGameFinished = false;
+        
+        let burnY = 0; let fireParticles = [];
+        let matchX, matchY, lastMatchX, lastMatchY, matchAngle, isLit, strikeDistance, igniteX, igniteY, igniteAngle, introTick;
+
+        let isPinching = false, pinchStartDist = 0, pinchRatio = 1; 
+        let ballX = cw/2, ballY = ch-100, ballScale = 0.2, isThrown = false, throwVy = 0, throwVx = 0;
+
+        mainCanvas.width = cw; mainCanvas.height = ch; textureCanvas.width = cw; textureCanvas.height = ch; creaseCanvas.width = cw; creaseCanvas.height = ch;
+
+        // --- 기능 함수들 ---
+        function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+            let words = text.split(''); let line = '';
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                if (ctx.measureText(testLine).width > maxWidth && n > 0) { ctx.fillText(line, x, y); line = words[n]; y += lineHeight; }
+                else { line = testLine; }
+            }
+            ctx.fillText(line, x, y); return y; 
+        }
+
+        function goToGamePage() {
+            document.getElementById('start-page').style.opacity = '0'; document.getElementById('start-page').style.visibility = 'hidden';
+            document.getElementById('game-page').style.opacity = '1'; document.getElementById('game-page').style.visibility = 'visible';
+            input.focus(); input.blur();
+        }
+
+        function completeWriting() {
+            if(input.value.trim() === "") return alert("내용을 입력해주세요.");
+            const scrollY = input.scrollTop;
+            textureCtx.clearRect(0, 0, cw, ch); textureCtx.fillStyle = "#5d5d5d"; textureCtx.font = "22px 'InkLiquid', sans-serif"; textureCtx.textBaseline = "alphabetic";
+            const px = 25; const mw = cw - 50; const lh = 40; let cy = 36 - scrollY; 
+            input.value.split('\n').forEach(p => { cy = wrapText(textureCtx, p, px, cy, mw, lh); cy += lh; });
+            input.style.visibility = 'hidden'; document.getElementById('btn-submit').style.visibility = 'hidden'; modal.style.display = 'flex';
+        }
+
+        function bakePaperIntoCanvas() {
+            const container = document.getElementById('canvas-container');
+            container.style.background = "transparent"; container.style.boxShadow = "none";
+            const scrollY = input.scrollTop;
+            const temp = document.createElement('canvas'); temp.width = cw; temp.height = ch;
+            const tCtx = temp.getContext('2d'); tCtx.fillStyle = "white"; tCtx.fillRect(0,0,cw,ch);
+            tCtx.fillStyle = "#e0e0e0"; for(let y = 39 - (scrollY % 40); y < ch + 40; y += 40) tCtx.fillRect(0, y, cw, 1);
+            tCtx.drawImage(textureCanvas, 0, 0);
+            textureCtx.clearRect(0, 0, cw, ch); textureCtx.drawImage(temp, 0, 0);
+        }
+
+        function precomputeCreaseTexture() {
+            creaseCtx.clearRect(0, 0, cw, ch); creaseCtx.strokeStyle = "rgba(0, 0, 0, 0.25)"; creaseCtx.lineWidth = 1;
+            for(let i=0; i<80; i++) {
+                let sx = Math.random()*cw, sy = Math.random()*ch; creaseCtx.beginPath(); creaseCtx.moveTo(sx, sy);
+                for(let j=0; j<6; j++) creaseCtx.lineTo(sx+(Math.random()-0.5)*80, sy+(Math.random()-0.5)*80);
+                creaseCtx.stroke();
+            }
+        }
+
+        // 🔥 [개선] 원형 그림자 효과 제거된 종이 뭉치 그리기 🔥
+        function drawCrumpledBall(ctx, x, y, scale) {
+            ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
+            ctx.beginPath();
+            if (scale < 0.9) {
+                let r = 160 + (scale * 40); let spikes = 30;
+                for(let i=0; i<spikes*2; i++) {
+                    let ang = (i/spikes)*Math.PI; let amp = (1-scale)*(i%2===0?25:5) + Math.abs(Math.sin(i*123.4))*8;
+                    ctx.lineTo(Math.cos(ang)*(r-amp), Math.sin(ang)*(r-amp));
+                }
+            } else { ctx.rect(-cw/2+10, -ch/2+10, cw-20, ch-20); }
+            ctx.closePath(); ctx.clip();
+            ctx.fillStyle = "white"; ctx.fillRect(-cw/2, -ch/2, cw, ch);
+            ctx.fillStyle = "#e0e0e0"; for(let yy = -ch/2+39; yy < ch/2+40; yy+=40) ctx.fillRect(-cw/2, yy, cw, 1);
+            ctx.drawImage(textureCanvas, -cw/2, -ch/2);
+            if(scale < 0.95) {
+                ctx.globalAlpha = Math.min((1-scale)*1.5, 1);
+                ctx.drawImage(creaseCanvas, -cw/2, -ch/2);
+            }
+            ctx.restore();
+            // 종이 외곽의 원형 그림자(RadialGradient) 제거함
+        }
+
+        function selectAction(type) {
+            selectedAction = type; modal.style.display = 'none';
+            if(type === 'tear') { bakePaperIntoCanvas(); paperPieces.push(new PaperPiece([{x:0,y:0},{x:cw,y:0},{x:cw,y:ch},{x:0,y:ch}], 0, 0, 0, 0)); gameLoop(); }
+            else if(type === 'erase') { mainCtx.drawImage(textureCanvas, 0, 0); gameLoop(); }
+            else if(type === 'burn_ready') { bakePaperIntoCanvas(); matchX=cw/2; matchY=ch/2; matchAngle=Math.PI/4; isLit=false; strikeDistance=0; fireParticles=[]; gameLoop(); }
+            else if(type === 'basketball_prep') { bakePaperIntoCanvas(); pinchRatio=1; isPinching=false; precomputeCreaseTexture(); triggerVibration(); gameLoop(); }
+            else if(type === 'trash') { 
+                const cont = document.getElementById('canvas-container'); cont.style.transition="1s"; cont.style.transform="scale(0.1) rotate(720deg) translateY(1000px)"; cont.style.opacity="0";
+                setTimeout(() => finalize("쓰레기통에 처박았습니다."), 1000);
+            }
+        }
+
+        function triggerVibration(ms = 20) { if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(ms); }
+        function getMousePos(e) { const r = mainCanvas.getBoundingClientRect(); const cx = e.touches ? e.touches[0].clientX : e.clientX; const cy = e.touches ? e.touches[0].clientY : e.clientY; return { x: cx - r.left, y: cy - r.top }; }
+
+        function handleStart(e) { 
+            if(!selectedAction) return; if(e.cancelable) e.preventDefault(); isDrawing = true; const pos = getMousePos(e); swipeStartX = pos.x; swipeStartY = pos.y; swipeCurrY = pos.y;
+            if (selectedAction === 'burn_ready') { selectedAction = 'burn_striking'; matchX=pos.x; matchY=pos.y; lastMatchX=pos.x; lastMatchY=pos.y; strikeDistance=0; }
+            else if (selectedAction === 'basketball_prep' && e.touches && e.touches.length === 2) { isPinching = true; pinchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+            else if (selectedAction === 'basketball_throw') { swipeStartY = pos.y; }
+        }
+
+        function handleMove(e) {
+            if(!selectedAction || isGameFinished) return; if(e.cancelable) e.preventDefault(); const pos = getMousePos(e);
+            if(isDrawing && selectedAction === 'erase') { mainCtx.globalCompositeOperation = 'destination-out'; mainCtx.beginPath(); mainCtx.arc(pos.x, pos.y, 20, 0, Math.PI*2); mainCtx.fill(); triggerVibration(); }
+            else if(isDrawing && selectedAction === 'tear') { /* 연속절단로직... */ }
+            else if(isDrawing && selectedAction === 'burn_striking') { /* 성냥로직... */ }
+            else if (selectedAction === 'basketball_prep' && isPinching && e.touches && e.touches.length === 2) {
+                let d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                if(pinchStartDist > 0) { pinchRatio = Math.max(0.2, Math.min(1, d / pinchStartDist)); }
+            } 
+            else if (selectedAction === 'basketball_throw' && !isThrown) { swipeCurrY = pos.y; ballX = pos.x; }
+        }
+
+        function handleEnd(e) { 
+            isDrawing = false; 
+            if(selectedAction === 'erase' && !isGameFinished) checkEraseComplete();
+            if(isPinching) { isPinching = false; pinchStartDist = 0; }
+            // 🔥 [개선] 투척 미니게임 로직 🔥
+            if(selectedAction === 'basketball_throw' && !isThrown) {
+                let dy = swipeStartY - swipeCurrY;
+                if (dy > 60) { isThrown = true; throwVy = -18; throwVx = (ballX - cw/2) * 0.08; triggerVibration(); }
+                else { ballX = cw/2; }
+            }
+        }
+
+        function finalize(msg) { alert(msg + "\n마음이 가벼워지셨길 바랍니다."); location.reload(); }
+
+        function checkEraseComplete() {
+            const data = mainCtx.getImageData(0,0,cw,ch).data; let tx = 0;
+            for(let i=3; i<data.length; i+=60) { if(data[i]>0) tx++; }
+            if(tx < 10) { isGameFinished = true; finalize("기억을 모두 지웠습니다."); }
+        }
+
+        function drawSpikyFire(ctx, baseY, hMult, color, tOff) {
+            let t = Date.now()*0.015; ctx.beginPath(); ctx.moveTo(0, baseY);
+            for(let x=0; x<=cw; x+=24) { 
+                let n = Math.sin(x*0.15+t+tOff)*Math.cos(x*0.05-t)*0.5+0.5; let sh = n*hMult+Math.random()*10;
+                ctx.lineTo(x+12, baseY-sh); ctx.lineTo(x+24, baseY+Math.random()*5);
+            }
+            ctx.lineTo(cw, ch+50); ctx.lineTo(0, ch+50); ctx.fillStyle = color; ctx.fill();
+        }
+
+        function gameLoop() {
+            if(isGameFinished) return; requestAnimationFrame(gameLoop);
+            
+            if(selectedAction === 'tear') {
+                mainCtx.clearRect(0,0,cw,ch);
+                for(let i=paperPieces.length-1; i>=0; i--) { paperPieces[i].update(); paperPieces[i].draw(mainCtx, textureCanvas); }
+            }
+            else if(selectedAction === 'basketball_prep') {
+                mainCtx.clearRect(0,0,cw,ch); drawCrumpledBall(mainCtx, cw/2, ch/2, pinchRatio);
+                if(pinchRatio > 0.8) {
+                    mainCtx.fillStyle = "rgba(255,255,255,0.8)"; mainCtx.beginPath(); mainCtx.roundRect(cw/2-140, ch/2-120, 280, 40, 10); mainCtx.fill();
+                    mainCtx.fillStyle = "#333"; mainCtx.font = "bold 16px sans-serif"; mainCtx.textAlign = "center"; mainCtx.fillText("두 손가락을 모아 종이를 구기세요! ✊", cw/2, ch/2-95);
+                }
+                if (pinchRatio <= 0.2) { triggerVibration(50); selectedAction = 'basketball_throw'; ballX = cw/2; ballY = ch-100; ballScale = 0.2; isThrown = false; }
+            }
+            else if (selectedAction === 'basketball_throw') {
+                mainCtx.clearRect(0,0,cw,ch);
+                mainCtx.font = "80px Arial"; mainCtx.textAlign = "center"; mainCtx.fillText("🗑️", cw/2, 110);
+                
+                if (isThrown) {
+                    ballY += throwVy; ballX += throwVx; ballScale -= 0.005; if(ballScale < 0.05) ballScale = 0.05;
+                    // 골인 성공 체크 (쓰레기통 위치)
+                    if (ballY < 130 && Math.abs(ballX - cw/2) < 40) {
+                        isGameFinished = true; triggerVibration(40); setTimeout(() => finalize("쓰레기통에 골인! 마음도 비워졌습니다."), 400);
+                    }
+                    // 실패 체크 (화면 밖으로 나가거나 쓰레기통을 지나침)
+                    else if (ballY < 50 || ballX < 0 || ballX > cw) {
+                        isThrown = false; ballX = cw/2; ballY = ch-100; ballScale = 0.2;
+                        alert("아까비! 다시 한 번 던져보세요! 🏀");
+                    }
+                } else {
+                    mainCtx.fillStyle = "rgba(0,0,0,0.6)"; mainCtx.font = "bold 18px sans-serif"; mainCtx.fillText("위로 휙! 던져서 골인시키세요 👆", cw/2, ch/2+50);
+                }
+                if (!isGameFinished) drawCrumpledBall(mainCtx, ballX, ballY, ballScale);
+            }
+            else if(selectedAction === 'burn') {
+                mainCtx.clearRect(0,0,cw,ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); burnY -= 3.0; 
+                drawSpikyFire(mainCtx, burnY-10, 25, "rgba(20,10,5,0.95)", 0); drawSpikyFire(mainCtx, burnY-5, 35, "rgba(220,50,50,0.9)", 100); drawSpikyFire(mainCtx, burnY+2, 40, "rgba(255,140,0,0.95)", 200);
+                mainCtx.globalCompositeOperation='destination-out'; drawSpikyFire(mainCtx, burnY+15, 30, "black", 150); mainCtx.globalCompositeOperation='source-over';
+                if (burnY < -100) { isGameFinished = true; setTimeout(() => finalize("재가 되어 날아갔습니다."), 500); }
+            }
+        }
+
+        mainCanvas.addEventListener('mousedown', handleStart); mainCanvas.addEventListener('touchstart', handleStart, {passive:false});
+        window.addEventListener('mousemove', handleMove, {passive:false}); window.addEventListener('touchmove', handleMove, {passive:false});
+        window.addEventListener('mouseup', handleEnd); window.addEventListener('touchend', handleEnd);
+    </script>
+</body>
+</html>
