@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>감정쓰레기통🗑️ - 드득드득 갈아버리기</title>
+    <style>
+        @font-face {
+            font-family: 'InkLiquid';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_one@1.0/InkLipquid.woff') format('woff');
+            font-weight: normal;
+            font-display: swap;
+        }
+
+        :root { --bg: #fdf1e8; --text-main: #5d5d5d; --accent: #ff5252; }
+        body { 
+            background-color: var(--bg); margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden; font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        .page { 
+            position: absolute; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s, visibility 0.5s; 
+        }
+
+        #start-page { z-index: 10; opacity: 1; visibility: visible; }
+        .description-box { width: 80%; max-width: 400px; text-align: center; color: var(--text-main); line-height: 1.7; font-size: 0.95rem;}
+
+        #game-page { z-index: 5; opacity: 0; visibility: hidden; }
+        
+        #canvas-container {
+            position: relative; width: 320px; height: 450px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.1); border-radius: 4px;
+            background-color: white;
+            background-image: repeating-linear-gradient(transparent, transparent 39px, #e0e0e0 39px, #e0e0e0 40px);
+            overflow: hidden; transition: background 0.5s, box-shadow 0.5s;
+        }
+        
+        canvas { position: absolute; top: 0; left: 0; cursor: crosshair; background: transparent; }
+        
+        #text-input {
+            position: absolute; width: 100%; height: 100%; border: none; 
+            padding: 8px 25px; 
+            font-family: 'InkLiquid', sans-serif; font-size: 22px; line-height: 40px; 
+            word-break: break-all; resize: none; box-sizing: border-box; outline: none; 
+            background: transparent; color: var(--text-main); z-index: 1; border-radius: 4px;
+        }
+        #text-input::placeholder { color: #bbb; }
+
+        .submit-btn {
+            margin-top: 30px; padding: 15px 40px; border: none; border-radius: 30px; 
+            background: var(--accent); color: white; font-weight: bold; font-size: 1.1rem; 
+            cursor: pointer; box-shadow: 0 6px 15px rgba(255, 82, 82, 0.3); transition: 0.2s; z-index: 10;
+        }
+
+        #options-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); display: none;
+            justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 20px; text-align: center;
+            width: 280px; box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+        }
+        .option-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .option-btn {
+            padding: 12px; border: 1px solid #eee; border-radius: 10px;
+            background: #fff; font-weight: bold; cursor: pointer; color: #555; transition: 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-page" class="page">
+        <h1>감정쓰레기통</h1>
+        <div style="font-size: 6rem; cursor: pointer; margin-bottom: 30px;" onclick="goToGamePage()">🗑️</div>
+        <div class="description-box">
+            <p>버리고 싶은 기억을 던지세요.<br>당신의 마음이 가벼워질 때까지.</p>
+        </div>
+    </div>
+
+    <div id="game-page" class="page">
+        <div id="canvas-container">
+            <textarea id="text-input" placeholder="없애고 싶은 생각이나 감정을 이 곳에 털어 놓으세요. 작성한 내용은 저장되지 않습니다."></textarea>
+            <canvas id="main-canvas"></canvas>
+            <canvas id="hidden-texture" style="display:none;"></canvas>
+            <canvas id="crease-hidden" style="display:none;"></canvas>
+        </div>
+        <button id="btn-submit" class="submit-btn" onclick="completeWriting()">✍️ 작성 완료</button>
+    </div>
+
+    <div id="options-modal">
+        <div class="modal-content">
+            <h3 style="margin-top:0; color:#444;">이 기억을 어떻게 처리할까요?</h3>
+            <div class="option-list">
+                <button class="option-btn" onclick="selectAction('tear')">✂️ 1. 산산조각 내기 (Tear)</button>
+                <button class="option-btn" onclick="selectAction('erase')">🧽 2. 글자만 지우기 (Erase)</button>
+                <button class="option-btn" onclick="selectAction('burn_ready')">🔥 3. 불태워 버리기 (Burn)</button>
+                <button class="option-btn" onclick="selectAction('basketball_prep')">🏀 4. 꽉꽉 구겨버리기 (Crumple)</button>
+                <button class="option-btn" onclick="selectAction('shred_ready')">✂️ 5. 갈아버리기 (Shred)</button>
+                <button class="option-btn" onclick="selectAction('trash')">🗑️ 6. 쓰레기통에 던지기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const PolygonClipper = (() => {
+            const getIntersection = (A, B, C, D) => {
+                const a1 = B.y - A.y; const b1 = A.x - B.x; const c1 = a1 * A.x + b1 * A.y;
+                const a2 = D.y - C.y; const b2 = C.x - D.x; const c2 = a2 * C.x + b2 * C.y;
+                const det = a1 * b2 - a2 * b1;
+                if (det === 0) return null;
+                const x = (b2 * c1 - b1 * c2) / det;
+                const y = (a1 * c2 - a2 * c1) / det;
+                const minX = Math.min(C.x, D.x) - 0.1; const maxX = Math.max(C.x, D.x) + 0.1;
+                const minY = Math.min(C.y, D.y) - 0.1; const maxY = Math.max(C.y, D.y) + 0.1;
+                if (x >= minX && x <= maxX && y >= minY && y <= maxY) return {x, y};
+                return null;
+            };
+            const splitPolygon = (vertices, A, B) => {
+                const p1 = [], p2 = [];
+                for (let i = 0; i < vertices.length; i++) {
+                    const cur = vertices[i]; const next = vertices[(i + 1) % vertices.length];
+                    const side = (B.x - A.x) * (cur.y - A.y) - (B.y - A.y) * (cur.x - A.x);
+                    if (side >= 0) p1.push(cur); if (side <= 0) p2.push(cur); 
+                    const intersect = getIntersection(A, B, cur, next);
+                    if (intersect) {
+                        const distCur = Math.hypot(intersect.x - cur.x, intersect.y - cur.y);
+                        const distNext = Math.hypot(intersect.x - next.x, intersect.y - next.y);
+                        if (distCur > 0.1 && distNext > 0.1) { p1.push(intersect); p2.push(intersect); }
+                    }
+                }
+                if (p1.length >= 3 && p2.length >= 3) return [p1, p2];
+                return null;
+            };
+            return { splitPolygon };
+        })();
+
+        class PaperPiece {
+            constructor(vertices, dx = 0, dy = 0, vx = 0, vy = 0) {
+                this.vertices = vertices; this.dx = dx; this.dy = dy;
+                this.vx = vx; this.vy = vy; this.alpha = 1; this.delay = 120;
+            }
+            update() {
+                if(this.vx === 0 && this.vy === 0) return;
+                this.delay--;
+                if (this.delay <= 0) { this.vy += 0.02; this.alpha -= 0.003; } 
+                else { this.vx *= 0.88; this.vy *= 0.88; }
+                const currentX = 160 + this.dx; const currentY = 225 + this.dy;
+                if (currentX < 20) { this.vx = Math.abs(this.vx) * 0.5; this.dx += 1; }
+                if (currentX > 300) { this.vx = -Math.abs(this.vx) * 0.5; this.dx -= 1; }
+                if (currentY < 20) { this.vy = Math.abs(this.vy) * 0.5; this.dy += 1; }
+                this.dx += this.vx; this.dy += this.vy;
+            }
+            draw(ctx, texture) {
+                if (this.alpha <= 0) return; ctx.save();
+                ctx.globalAlpha = this.alpha; ctx.translate(this.dx, this.dy); ctx.beginPath();
+                this.vertices.forEach((v, i) => { if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y); });
+                ctx.closePath(); ctx.clip(); ctx.drawImage(texture, 0, 0); ctx.strokeStyle = "rgba(0,0,0,0.08)"; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+            }
+        }
+
+        const mainCanvas = document.getElementById('main-canvas');
+        const mainCtx = mainCanvas.getContext('2d');
+        const textureCanvas = document.getElementById('hidden-texture');
+        const textureCtx = textureCanvas.getContext('2d');
+        const creaseCanvas = document.getElementById('crease-hidden');
+        const creaseCtx = creaseCanvas.getContext('2d');
+        const input = document.getElementById('text-input');
+        const modal = document.getElementById('options-modal');
+        const cw = 320, ch = 450;
+        
+        let selectedAction = null; let isDrawing = false; let swipeTrail = []; let swipeStartX = 0, swipeStartY = 0; 
+        let paperPieces = []; let isGameFinished = false;
+        
+        let burnY = 0; let fireParticles = [];
+        let matchX = cw / 2, matchY = ch / 2, lastMatchX = cw / 2, lastMatchY = ch / 2, matchAngle = Math.PI / 4, isLit = false, strikeDistance = 0, igniteX = 0, igniteY = 0, igniteAngle = 0, introTick = 0;
+
+        let isPinching = false, pinchStartDist = 0, pinchRatio = 1; 
+
+        // 🔥 갈아버리기 (Shred) 전용 변수
+        let shredY = 0;
+        let isHandleDragging = false;
+        let imgShredder = new Image();
+        let imgHandle = new Image();
+        imgShredder.src = "https://i.imgur.com/k9addc7.png"; // 분홍 파쇄기 본체
+        imgHandle.src = "https://i.imgur.com/adde7.png";     // 분홍 손잡이
+
+        mainCanvas.width = cw; mainCanvas.height = ch; textureCanvas.width = cw; textureCanvas.height = ch; creaseCanvas.width = cw; creaseCanvas.height = ch;
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            let words = text.split(''); let line = '';
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                if (context.measureText(testLine).width > maxWidth && n > 0) {
+                    context.fillText(line, x, y); line = words[n]; y += lineHeight;
+                } else { line = testLine; }
+            }
+            context.fillText(line, x, y); return y; 
+        }
+
+        function goToGamePage() {
+            document.getElementById('start-page').style.opacity = '0'; document.getElementById('start-page').style.visibility = 'hidden'; document.getElementById('game-page').style.opacity = '1'; document.getElementById('game-page').style.visibility = 'visible';
+            input.focus(); input.blur();
+        }
+
+        function completeWriting() {
+            if(input.value.trim() === "") return alert("내용을 입력해주세요.");
+            const scrollY = input.scrollTop;
+            textureCtx.clearRect(0, 0, cw, ch);
+            textureCtx.fillStyle = "#5d5d5d"; 
+            textureCtx.font = "22px 'InkLiquid', sans-serif";
+            textureCtx.textBaseline = "alphabetic";
+            const paddingX = 25; const maxWidth = cw - (paddingX * 2); const lineHeight = 40; 
+            let currentY = 36 - scrollY; 
+            input.value.split('\n').forEach(para => {
+                currentY = wrapText(textureCtx, para, paddingX, currentY, maxWidth, lineHeight);
+                currentY += lineHeight; 
+            });
+            input.style.visibility = 'hidden'; document.getElementById('btn-submit').style.visibility = 'hidden'; modal.style.display = 'flex';
+        }
+
+        function bakePaperIntoCanvas() {
+            const container = document.getElementById('canvas-container');
+            container.style.background = "transparent";
+            container.style.boxShadow = "none";
+            
+            const scrollY = input.scrollTop;
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cw; tempCanvas.height = ch;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = "white"; tempCtx.fillRect(0,0,cw,ch);
+            tempCtx.fillStyle = "#e0e0e0"; 
+            for(let y = 39 - (scrollY % 40); y < ch + 40; y += 40) tempCtx.fillRect(0, y, cw, 1);
+            tempCtx.drawImage(textureCanvas, 0, 0);
+            
+            textureCtx.clearRect(0, 0, cw, ch);
+            textureCtx.drawImage(tempCanvas, 0, 0);
+        }
+
+        function precomputeCreaseTexture() {
+            creaseCtx.clearRect(0, 0, cw, ch);
+            creaseCtx.strokeStyle = "rgba(0, 0, 0, 0.2)"; // 아주 옅은 주름
+            creaseCtx.lineWidth = 1;
+            
+            for(let i=0; i<80; i++) {
+                let sX = Math.random() * cw;
+                let sY = Math.random() * ch;
+                creaseCtx.beginPath();
+                creaseCtx.moveTo(sX, sY);
+                let steps = Math.random() * 8 + 4;
+                for(let j=0; j<steps; j++) {
+                    creaseCtx.lineTo(sX + (Math.random()-0.5)*80, sY + (Math.random()-0.5)*80);
+                }
+                creaseCtx.stroke();
+            }
+        }
+
+        function selectAction(type) {
+            selectedAction = type; modal.style.display = 'none';
+            if(type === 'tear') {
+                bakePaperIntoCanvas(); paperPieces.push(new PaperPiece([ {x:0,y:0},{x:cw,y:0},{x:cw,y:ch},{x:0,y:ch} ], 0, 0, 0, 0)); gameLoop(); 
+            } else if(type === 'erase') {
+                mainCtx.drawImage(textureCanvas, 0, 0); gameLoop();
+            } else if(type === 'burn_ready') {
+                bakePaperIntoCanvas(); matchX = cw / 2; matchY = ch / 2; matchAngle = Math.PI / 4; isLit = false; strikeDistance = 0; fireParticles = []; gameLoop();
+            } else if(type === 'basketball_prep') {
+                bakePaperIntoCanvas(); pinchRatio = 1; isPinching = false; precomputeCreaseTexture(); triggerVibration(); gameLoop();
+            } 
+            // 🔥 갈아버리기 대기 모드 🔥
+            else if(type === 'shred_ready') {
+                bakePaperIntoCanvas();
+                shredY = 0;
+                isGameFinished = false;
+                triggerVibration();
+                // 파쇄기 이미지 로드 대기 후 gameLoop 시작
+                if(imgShredder.complete && imgHandle.complete) {
+                    gameLoop();
+                } else {
+                    imgShredder.onload = imgHandle.onload = gameLoop;
+                }
+            } else if(type === 'trash') {
+                const cont = document.getElementById('canvas-container'); cont.style.transition = "1s"; cont.style.transform = "scale(0.1) rotate(720deg) translateY(1000px)"; cont.style.opacity = "0";
+                setTimeout(() => finalize("쓰레기통에 처박았습니다."), 1000);
+            }
+        }
+
+        function triggerVibration(ms = 20) { if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(ms); }
+        function getMousePos(e) { const rect = mainCanvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+
+        function handleStart(e) { 
+            if(!selectedAction) return; 
+            if(e.cancelable) e.preventDefault(); 
+            isDrawing = true; 
+            const pos = getMousePos(e); swipeStartX = pos.x; swipeStartY = pos.y; swipeTrail = [pos]; 
+
+            if (selectedAction === 'burn_ready') {
+                selectedAction = 'burn_striking'; matchX = pos.x; matchY = pos.y; lastMatchX = pos.x; lastMatchY = pos.y; strikeDistance = 0;
+            } else if (selectedAction === 'basketball_prep' && e.touches && e.touches.length === 2) {
+                isPinching = true; pinchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            }
+            // 🔥 갈아버리기 드래그 시작 (파쇄기 손잡이 영역 근처) 🔥
+            else if (selectedAction === 'shred_ready') {
+                // 손잡이 드래그 감지 영역 (예: 캔버스 폭 320px, 높이 450px에서 x=200-280, y=300-380 부근)
+                if (pos.x > 200 && pos.x < 280 && pos.y > 300 && pos.y < 380) {
+                    selectedAction = 'shred_striking';
+                    isHandleDragging = true;
+                    handleStartY = pos.y;
+                    strikeDistance = 0;
+                }
+            }
+        }
+
+        function handleMove(e) {
+            if(!selectedAction || isGameFinished) return; 
+            if(e.cancelable) e.preventDefault(); 
+            const currPos = getMousePos(e);
+
+            if(isDrawing && selectedAction === 'erase') {
+                mainCtx.globalCompositeOperation = 'destination-out';
+                mainCtx.beginPath(); mainCtx.arc(currPos.x, currPos.y, 20, 0, Math.PI * 2); mainCtx.fill();
+                triggerVibration();
+            } else if(isDrawing && selectedAction === 'tear') {
+                swipeTrail.push(currPos); if(swipeTrail.length > 15) swipeTrail.shift(); 
+                const dist = Math.hypot(currPos.x - swipeStartX, currPos.y - swipeStartY);
+                if(dist > 40) { executeCut(swipeStartX, swipeStartY, currPos.x, currPos.y); swipeStartX = currPos.x; swipeStartY = currPos.y; }
+            } else if(isDrawing && selectedAction === 'burn_striking') {
+                let dx = currPos.x - lastMatchX; let dy = currPos.y - lastMatchY; let moveDist = Math.hypot(dx, dy);
+                matchX = currPos.x; matchY = currPos.y;
+                if (moveDist > 2) matchAngle = (dx > 0 ? 1 : -1) * Math.PI / 6; strikeDistance += moveDist; lastMatchX = currPos.x; lastMatchY = currPos.y;
+                if (Math.floor(strikeDistance / 30) > Math.floor((strikeDistance - moveDist) / 30)) {
+                    triggerVibration(5); fireParticles.push({ x: matchX, y: matchY, vx: (Math.random() - 0.5), vy: -Math.random() - 1, life: 1, size: Math.random() * 3 + 2, color: '#57606f' });
+                }
+                if (strikeDistance > 150) { isLit = true; triggerVibration(50); igniteX = matchX; igniteY = matchY; igniteAngle = matchAngle; selectedAction = 'burn_drop'; introTick = 0; isDrawing = false; }
+            } else if (selectedAction === 'basketball_prep' && isPinching && e.touches && e.touches.length === 2) {
+                let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                if(pinchStartDist > 0) { pinchRatio = currentDist / pinchStartDist; if(pinchRatio > 1.0) pinchRatio = 1.0; if(pinchRatio < 0.2) pinchRatio = 0.2; }
+            }
+            // 🔥 갈아버리기 드래그 마찰 로직 (성냥 긋기와 유사) 🔥
+            else if (selectedAction === 'shred_striking' && isHandleDragging) {
+                let dy = currPos.y - handleStartY;
+                let moveDist = Math.abs(dy);
+
+                // 손잡이 위치 업데이트
+                matchY = currPos.y;
+                matchAngle = (dy > 0 ? 1 : -1) * Math.PI / 6;
+
+                strikeDistance += moveDist;
+                handleStartY = currPos.y;
+
+                // 긁을 때 찌릿찌릿한 마찰 진동과 연기 발생
+                if (Math.floor(strikeDistance / 25) > Math.floor((strikeDistance - moveDist) / 25)) {
+                    triggerVibration(10); // 성냥보다 조금 더 강한 진동
+                    fireParticles.push({
+                        x: currPos.x, y: currPos.y,
+                        vx: (Math.random() - 0.5), vy: -Math.random() - 1,
+                        life: 1, size: Math.random() * 4 + 2, color: '#2c3e50' // 검은 연기 (파쇄된 종이 가루)
+                    });
+                }
+
+                // 🔥 일정 거리(120px) 이상 긁으면 본격적으로 갈리기 시작
+                if (strikeDistance > 120) {
+                    shredY += 20; // 1회 드래그당 종이 20px씩 갈림
+                    triggerVibration(30);
+                    // 본격적인 파쇄 모드로 전환 (이후에는 gameLoop에서 마스킹 및 조각 생성)
+                    selectedAction = 'shredding'; 
+                    isDrawing = false; // 드래그 강제 종료
+                    strikeDistance = 0; // 초기화
+                }
+            }
+        }
+
+        function handleEnd(e) { 
+            isDrawing = false; swipeTrail = []; 
+            if(selectedAction === 'erase' && !isGameFinished) checkEraseComplete();
+            if(selectedAction === 'burn_striking') { selectedAction = 'burn_ready'; strikeDistance = 0; }
+            if(isPinching) { isPinching = false; pinchStartDist = 0; }
+            // 🔥 갈아버리기 마찰 취소 🔥
+            if(selectedAction === 'shred_striking') {
+                selectedAction = 'shred_ready';
+                isHandleDragging = false;
+                strikeDistance = 0;
+            }
+        }
+
+        function executeCut(startX, startY, endX, endY) {
+            let slicedSucceeded = false; const newPieces = [];
+            for (let i = paperPieces.length - 1; i >= 0; i--) {
+                const p = paperPieces[i]; const localA = { x: startX - p.dx, y: startY - p.dy }; const localB = { x: endX - p.dx, y: endY - p.dy }; const result = PolygonClipper.splitPolygon(p.vertices, localA, localB);
+                if (result) { slicedSucceeded = true; paperPieces.splice(i, 1); newPieces.push(new PaperPiece(result[0], p.dx, p.dy, p.vx - 1.5, p.vy - 1.5)); newPieces.push(new PaperPiece(result[1], p.dx, p.dy, p.vx + 1.5, p.vy + 1.5)); }
+            }
+            if (slicedSucceeded) { paperPieces.push(...newPieces); triggerVibration(); }
+            if(paperPieces.length > 500) { isGameFinished = true; setTimeout(() => finalize("형체도 없이 박살 냈습니다."), 1500); }
+        }
+
+        function checkEraseComplete() {
+            const imageData = mainCtx.getImageData(0, 0, cw, ch).data; let textPixels = 0;
+            for (let i = 3; i < imageData.length; i += 4 * 15) { if (imageData[i] > 0) textPixels++; }
+            if (textPixels < 10) { isGameFinished = true; finalize("기억을 모두 지웠습니다."); }
+        }
+
+        function drawSpikyFire(ctx, baseY, heightMult, color, timeOffset) {
+            let time = Date.now() * 0.015; ctx.beginPath(); ctx.moveTo(0, baseY);
+            for(let x=0; x<=cw; x+=24) { let noise = Math.sin(x * 0.15 + time + timeOffset) * Math.cos(x * 0.05 - time) * 0.5 + 0.5; let spikeHeight = noise * heightMult + Math.random() * 10; ctx.lineTo(x + 12, baseY - spikeHeight); ctx.lineTo(x + 24, baseY + Math.random() * 5); }
+            ctx.lineTo(cw, ch+50); ctx.lineTo(0, ch+50); ctx.fillStyle = color; ctx.fill();
+        }
+
+        function drawMatch(ctx, x, y, angle, isLit) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.fillStyle = "#d1ccc0"; ctx.fillRect(-3, 0, 6, 80); ctx.fillStyle = isLit ? "#2c3e50" : "#eb4d4b"; ctx.beginPath(); ctx.ellipse(0, 0, 5, 8, 0, 0, Math.PI * 2); ctx.fill();
+            if(isLit) { let time = Date.now() * 0.02, flicker = Math.random() * 5; ctx.fillStyle = "rgba(255, 140, 0, 0.9)"; ctx.beginPath(); ctx.moveTo(0, -35 - flicker); ctx.quadraticCurveTo(15, -10, 5, 5); ctx.quadraticCurveTo(0, 10, -5, 5); ctx.quadraticCurveTo(-15, -10, 0, -35 - flicker); ctx.fill(); ctx.fillStyle = "rgba(255, 200, 50, 0.95)"; ctx.beginPath(); ctx.moveTo(0, -20 - flicker*0.5); ctx.quadraticCurveTo(8, -5, 3, 3); ctx.quadraticCurveTo(0, 6, -3, 3); ctx.quadraticCurveTo(-8, -5, 0, -20 - flicker*0.5); ctx.fill(); }
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            if(isGameFinished) return; 
+            requestAnimationFrame(gameLoop);
+
+            if(selectedAction === 'tear') {
+                mainCtx.clearRect(0, 0, cw, ch);
+                for (let i = paperPieces.length - 1; i >= 0; i--) { piece = paperPieces[i]; piece.update(); piece.draw(mainCtx, textureCanvas); if (piece.alpha <= 0 || piece.dy > 1200) paperPieces.splice(i, 1); }
+            } else if (selectedAction === 'burn_ready' || selectedAction === 'burn_striking') {
+                mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); drawMatch(mainCtx, matchX, matchY, matchAngle, isLit);
+                if (selectedAction === 'burn_ready') { mainCtx.fillStyle = "rgba(0, 0, 0, 0.5)"; mainCtx.font = "bold 18px 'Malgun Gothic'"; mainCtx.textAlign = "center"; mainCtx.fillText("화면을 길게 그어 불을 붙이세요! 🧨", cw/2, ch/2 - 50); }
+            }
+            // 🔥 갈아버리기 인트로 및 마찰 중 🔥
+            else if (selectedAction === 'shred_ready' || selectedAction === 'shred_striking') {
+                mainCtx.clearRect(0, 0, cw, ch);
+                mainCtx.globalCompositeOperation = 'source-over';
+                mainCtx.drawImage(textureCanvas, 0, 0); // 원본 종이
+
+                // 파쇄기 본체 고정 위치 (예: y=220 부근 종이 입력구)
+                mainCtx.drawImage(imgShredder, 20, 200, 280, 200);
+
+                // 손잡이 그리기 (드래그 할 때 회전)
+                let handleX = 250, handleY = 320;
+                mainCtx.save();
+                mainCtx.translate(handleX, handleY);
+                if(selectedAction === 'shred_striking') {
+                    mainCtx.rotate(matchAngle); // 드래그에 따라 각도 조전
+                }
+                mainCtx.drawImage(imgHandle, -30, -30, 60, 60); // 손잡이 중앙 정렬
+                mainCtx.restore();
+
+                if (selectedAction === 'shred_ready') {
+                    mainCtx.fillStyle = "rgba(0, 0, 0, 0.5)";
+                    mainCtx.font = "bold 18px 'Malgun Gothic'";
+                    mainCtx.textAlign = "center";
+                    mainCtx.fillText("손잡이를 돌려 갈아버리세요! 🧨", cw/2, ch/2 - 50);
+                }
+
+                // 마찰 연기 (성냥 연기 재사용)
+                for(let i=fireParticles.length-1; i>=0; i--) { let p = fireParticles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.05; if(p.life <= 0) fireParticles.splice(i, 1); else { mainCtx.globalAlpha = p.life; mainCtx.fillStyle = p.color; mainCtx.beginPath(); mainCtx.arc(p.x, p.y, p.size, 0, Math.PI*2); mainCtx.fill(); } }
+                mainCtx.globalAlpha = 1;
+            }
+            // 🔥 본격적인 파쇄 애니메이션 🔥
+            else if(selectedAction === 'shredding') {
+                mainCtx.clearRect(0, 0, cw, ch);
+                mainCtx.globalCompositeOperation = 'source-over';
+                mainCtx.drawImage(textureCanvas, 0, 0); 
+
+                // 1단계: 파쇄기 입력구 아래 종이 마스킹 (지우기)
+                let burnStopY = 220; // 종이 입력구 높이
+                burnStopY += shredY; // 입력구 위로 갈린 종이만큼 올라감
+
+                mainCtx.globalCompositeOperation = 'destination-out';
+                mainCtx.beginPath();
+                mainCtx.rect(0, 0, cw, burnStopY); 
+                mainCtx.fill();
+
+                // 2단계: 파쇄기 본체와 회전 손잡이 렌더링
+                mainCtx.globalCompositeOperation = 'source-over';
+                mainCtx.drawImage(imgShredder, 20, 200, 280, 200);
+
+                // 손잡이 회전 (date.now() 기반 자동 회전)
+                let time = Date.now() * 0.01;
+                mainCtx.save();
+                mainCtx.translate(250, 320);
+                mainCtx.rotate(time); 
+                mainCtx.drawImage(imgHandle, -30, -30, 60, 60);
+                mainCtx.restore();
+
+                // 3단계: 갈려나가는 조각들 대량 생성 및 렌더링
+                if (burnStopY > 200 && burnStopY < ch) {
+                    // 입력구 하단에서 조각 생성
+                    for(let i=0; i<15; i++) {
+                        let pColor = Math.random() > 0.3 ? "rgba(255,255,255, 0.9)" : "rgba(100,200,250, 0.8)"; // 종이/파란줄
+                        fireParticles.push({
+                            x: Math.random() * (cw - 40) + 20,
+                            y: burnStopY + Math.random() * 5,
+                            vx: (Math.random() - 0.5) * 1.5,
+                            vy: Math.random() * 4 + 2, // 중력 방향으로 떨어짐
+                            life: 1,
+                            size: Math.random() * 6 + 3,
+                            color: pColor,
+                            type: 'shred'
+                        });
+                    }
+                }
+
+                for(let i=fireParticles.length-1; i>=0; i--) {
+                    let p = fireParticles[i];
+                    p.x += p.vx; p.y += p.vy;
+                    p.life -= 0.02; // 조금 천천히 사라짐
+                    if(p.life <= 0) fireParticles.splice(i, 1);
+                    else {
+                        mainCtx.save();
+                        mainCtx.globalAlpha = p.life;
+                        mainCtx.fillStyle = p.color;
+                        mainCtx.beginPath();
+                        if(p.type === 'shred') {
+                            // 뾰족한 조각 형태 (좁고 긴 직사각형)
+                            mainCtx.rect(p.x, p.y, Math.random()*2+1, Math.random()*15+10);
+                        } else {
+                            mainCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+                        }
+                        mainCtx.fill();
+                        mainCtx.restore();
+                    }
+                }
+                mainCtx.globalAlpha = 1;
+
+                // 4단계: 파쇄된 종이가 아래 투명 보관함에 쌓이는 효과 (갈수록 불투명해짐)
+                let finalBoxY = ch - 50; // 파쇄기 보관함 바닥
+                let pileHeightMult = Math.min(1, shredY / ch);
+                mainCtx.fillStyle = "rgba(220, 220, 220, " + pileHeightMult * 0.6 + ")"; // 쌓인 종이 질감
+                mainCtx.beginPath();
+                // 뾰족뾰족하게 쌓임 표현
+                mainCtx.moveTo(25, finalBoxY);
+                for(let x=25; x<=295; x+=10) {
+                    mainCtx.lineTo(x, finalBoxY - (pileHeightMult * 100) + Math.sin(x*123.4)*10 + Math.random()*5);
+                }
+                mainCtx.lineTo(cw-25, finalBoxY);
+                mainCtx.fill();
+
+                if (burnStopY > ch - 100 && fireParticles.length === 0 && !isGameFinished) {
+                    isGameFinished = true;
+                    setTimeout(() => finalize("형체도 없이 박살 냈습니다."), 1500);
+                }
+            }
+            // 본격적인 타오름 모드(burn)
+            else if(selectedAction === 'burn') {
+                mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); burnY -= 3.0; drawSpikyFire(mainCtx, burnY - 10, 25, "rgba(20, 10, 5, 0.95)", 0);      drawSpikyFire(mainCtx, burnY - 5, 35, "rgba(220, 50, 50, 0.9)", 100);    drawSpikyFire(mainCtx, burnY + 2, 40, "rgba(255, 140, 0, 0.95)", 200);   drawSpikyFire(mainCtx, burnY + 8, 45, "rgba(255, 200, 50, 0.98)", 300);  mainCtx.globalCompositeOperation = 'destination-out'; drawSpikyFire(mainCtx, burnY + 15, 30, "black", 150); mainCtx.globalCompositeOperation = 'source-over'; if (burnY > -50) { for(let i=0; i<1; i++) { let pType = Math.random(); let pColor = pType > 0.5 ? '#e84118' : (pType > 0.2 ? '#fbc531' : '#2f3640'); fireParticles.push({ x: Math.random() * cw, y: burnY - 40 + Math.random() * 15, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 4 - 3, life: 1, size: Math.random() * 10 + 8, color: pColor }); } } for(let i=fireParticles.length-1; i>=0; i--) { let p = fireParticles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.03; if(p.life <= 0) fireParticles.splice(i, 1); else { mainCtx.save(); mainCtx.globalAlpha = p.life; mainCtx.translate(p.x, p.y); mainCtx.fillStyle = p.color; mainCtx.beginPath(); mainCtx.moveTo(0, -p.size * 1.5); mainCtx.quadraticCurveTo(p.size, -p.size * 0.5, p.size, p.size * 0.5); mainCtx.quadraticCurveTo(0, p.size * 1.2, -p.size, p.size * 0.5); mainCtx.quadraticCurveTo(-p.size, -p.size * 0.5, 0, -p.size * 1.5); mainCtx.fill(); mainCtx.restore(); } } mainCtx.globalAlpha = 1; if (burnY < -100 && fireParticles.length === 0 && !isGameFinished) { isGameFinished = true; setTimeout(() => finalize("재가 되어 날아갔습니다."), 500); }
+            }
+        }
+
+        function finalize(msg) {
+            alert(msg + "\n마음이 가벼워지셨길 바랍니다.");
+            location.reload();
+        }
+
+        mainCanvas.addEventListener('mousedown', handleStart);
+        mainCanvas.addEventListener('touchstart', handleStart, {passive:false});
+        window.addEventListener('mousemove', handleMove, {passive:false});
+        window.addEventListener('touchmove', handleMove, {passive:false});
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchend', handleEnd);
+    </script>
+</body>
+</html>
