@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>지금 어떤 생각이 당신을 괴롭히고 있나요?</title>
+    <style>
+        /* UI 및 안내 문구용 레트로 폰트 */
+        @font-face {
+            font-family: 'RoundedFixedsys';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_six@1.2/DungGeunMo.woff') format('woff');
+            font-weight: normal;
+            font-display: swap;
+        }
+
+        /* 메모지 사용자 입력용 손글씨 폰트 */
+        @font-face {
+            font-family: 'GangwonEducationSaeum';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/GangwonEduSaeeum_OTFMediumA.woff') format('woff');
+            font-weight: normal;
+            font-display: swap;
+        }
+
+        :root { --bg: #fdf1e8; --text-main: #5d5d5d; --accent: #ff5252; }
+        body { 
+            background-color: var(--bg); margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden; font-family: 'RoundedFixedsys', 'Malgun Gothic', sans-serif;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        h1 { 
+            font-family: 'RoundedFixedsys', sans-serif; 
+            margin-bottom: 10px; font-size: 1.8rem; color: #444; 
+            text-align: center; padding: 0 20px; word-break: keep-all; line-height: 1.4;
+        }
+
+        .page { 
+            position: absolute; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.5s, visibility 0.5s; 
+        }
+
+        #start-page { z-index: 10; opacity: 1; visibility: visible; }
+        
+        #trashcan-emoji {
+            font-size: 6rem;
+            cursor: pointer;
+            margin-bottom: 25px;
+            transition: transform 0.2s;
+        }
+        #trashcan-emoji:hover {
+            transform: scale(1.05) translateY(-5px); 
+        }
+
+        .description-box { 
+            width: 85%; max-width: 400px; text-align: center; color: var(--text-main); 
+            line-height: 1.6; font-size: 1.05rem; font-family: 'RoundedFixedsys', sans-serif; 
+            word-break: keep-all; margin-top: 10px;
+        }
+
+        #game-page { z-index: 5; opacity: 0; visibility: hidden; }
+        
+        #canvas-container {
+            position: relative; width: 340px; height: 500px;
+            box-shadow: 0 15px 50px rgba(0,0,0,0.1); border-radius: 8px;
+            background-color: white; overflow: hidden;
+            background-image: repeating-linear-gradient(transparent, transparent 39px, #e0e0e0 39px, #e0e0e0 40px);
+        }
+        
+        #instruction-toast {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7); color: white; padding: 10px 20px;
+            border-radius: 20px; font-family: 'RoundedFixedsys', sans-serif; font-size: 15px;
+            z-index: 100; pointer-events: none; opacity: 0; transition: opacity 0.3s ease-in-out;
+            white-space: nowrap;
+        }
+
+        canvas { position: absolute; top: 0; left: 0; cursor: crosshair; background: transparent; }
+        
+        #text-input {
+            position: absolute; width: 100%; height: 100%; border: none; 
+            padding: 0 25px; 
+            font-family: 'GangwonEducationSaeum', sans-serif; font-size: 34px; line-height: 40px; 
+            word-break: break-all; resize: none; box-sizing: border-box; outline: none; 
+            background: transparent; color: var(--text-main); z-index: 1;
+        }
+        
+        #text-input::placeholder { 
+            color: #aaa; 
+            font-family: 'RoundedFixedsys', sans-serif; 
+            font-size: 16px; 
+            line-height: 40px;
+        }
+
+        .submit-btn {
+            margin-top: 30px; padding: 15px 40px; border: none; border-radius: 30px; 
+            background: var(--accent); color: white; font-weight: bold; font-size: 1.1rem; font-family: 'RoundedFixedsys', sans-serif;
+            cursor: pointer; box-shadow: 0 6px 15px rgba(255, 82, 82, 0.3); transition: 0.2s; z-index: 10;
+        }
+
+        #options-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none;
+            justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: white; padding: 25px; border-radius: 20px; text-align: center;
+            width: 280px; box-shadow: 0 20px 60px rgba(0,0,0,0.1); font-family: 'RoundedFixedsys', sans-serif;
+        }
+        .modal-content h3 { font-family: 'RoundedFixedsys', sans-serif; color: #444; margin-top:0;}
+        .option-list { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+        .option-btn {
+            padding: 12px; border: 1px solid #eee; border-radius: 10px;
+            background: #fff; font-weight: bold; cursor: pointer; color: #555; font-size: 1rem; font-family: 'RoundedFixedsys', sans-serif; transition: 0.2s;
+        }
+        .option-btn:active { background: #fdf1e8; border-color: var(--accent); }
+
+        #result-page { z-index: 20; opacity: 0; visibility: hidden; background-color: var(--bg); padding: 20px; box-sizing: border-box;}
+        
+        .result-title { 
+            font-size: 1.4rem; color: var(--accent); margin-bottom: 20px; 
+            font-family: 'RoundedFixedsys', sans-serif; text-align: center; white-space: nowrap;
+        }
+        
+        .result-msg { 
+            font-size: 1.1rem; color: #555; margin-bottom: 35px; 
+            font-family: 'RoundedFixedsys', sans-serif; text-align: center; 
+            line-height: 1.5; word-break: keep-all; max-width: 340px;
+        }
+        .result-msg p { margin: 0 0 14px 0; }
+        .result-msg p:last-child { margin-bottom: 0; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 280px; }
+        .result-btn { 
+            padding: 15px 0; border: none; border-radius: 30px; font-weight: bold; font-size: 1.1rem;
