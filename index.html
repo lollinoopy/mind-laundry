@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>지금 어떤 생각이 당신을 괴롭히고 있나요?</title>
+    <style>
+        @font-face {
+            font-family: 'GangwonEducationSaeum';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_2201-2@1.0/GangwonEduSaeeum_OTFMediumA.woff') format('woff');
+            font-weight: normal;
+            font-display: swap;
+        }
+
+        :root { --text-main: #5d5d5d; --accent: #ff8e8b; --accent-hover: #ff7571; }
+        
+        body { 
+            background: linear-gradient(-45deg, #fff1eb, #ace0f9, #fbc2eb, #e6dee9);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            margin: 0; padding: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden; font-family: 'GangwonEducationSaeum', 'Malgun Gothic', sans-serif;
+            touch-action: none; -webkit-user-select: none; user-select: none;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        h1 { 
+            font-family: 'GangwonEducationSaeum', sans-serif; 
+            margin-bottom: 35px; font-size: 2.2rem; color: #555; 
+            text-align: center; padding: 0 20px; word-break: keep-all; line-height: 1.3;
+        }
+
+        .page { 
+            position: absolute; width: 100%; height: 100%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: opacity 0.8s ease, visibility 0.8s; 
+        }
+
+        #start-page { z-index: 10; opacity: 1; visibility: visible; }
+        
+        #trashcan-icon-wrapper {
+            width: 110px; height: 110px;
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05); margin-bottom: 25px; cursor: pointer;
+            animation: float 3s ease-in-out infinite; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #trashcan-icon-wrapper:active { transform: scale(0.9); }
+        #trashcan-emoji { font-size: 4rem; margin-top: -5px; }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .description-box { 
+            width: 85%; max-width: 400px; text-align: center; color: #666; 
+            line-height: 1.5; font-size: 1.4rem; font-family: 'GangwonEducationSaeum', sans-serif; 
+            word-break: keep-all; margin-top: 5px;
+        }
+
+        #game-page { z-index: 5; opacity: 0; visibility: hidden; }
+        
+        .top-back-btn {
+            position: absolute; top: 25px; left: 20px;
+            background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 20px; padding: 8px 16px;
+            font-family: 'GangwonEducationSaeum', sans-serif; font-size: 1.4rem;
+            color: #555; cursor: pointer; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: all 0.2s;
+        }
+        .top-back-btn:hover { background: rgba(255, 255, 255, 0.9); transform: translateY(-1px); }
+        .top-back-btn:active { transform: translateY(1px); }
+
+        #canvas-container {
+            position: relative; width: 300px; height: 420px;
+            background: rgba(255, 255, 255, 0.7);
+            background-image: repeating-linear-gradient(transparent, transparent 35px, rgba(0,0,0,0.06) 35px, rgba(0,0,0,0.06) 36px);
+            backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+            border-radius: 15px; box-shadow: 0 20px 50px rgba(0,0,0,0.08); overflow: hidden;
+        }
+        
+        #instruction-toast {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(255, 245, 245, 0.85); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            color: var(--accent-hover); border: 1px solid rgba(255, 255, 255, 0.6);
+            padding: 10px 22px; border-radius: 20px; font-family: 'GangwonEducationSaeum', sans-serif; font-size: 1.4rem;
+            z-index: 100; pointer-events: none; opacity: 0; visibility: hidden; 
+            transition: opacity 0.5s ease-in-out, visibility 0.5s ease-in-out;
+            white-space: normal; word-break: keep-all; width: max-content; max-width: 85%; line-height: 1.2;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05); display: flex; justify-content: center; align-items: center; text-align: center; box-sizing: border-box;
+        }
+        
+        #instruction-toast.show { opacity: 1; visibility: visible; }
+
+        canvas { position: absolute; top: 0; left: 0; cursor: crosshair; background: transparent; }
+        
+        #text-input {
+            position: absolute; width: 100%; height: 100%; border: none; 
+            padding: 8px 25px; font-family: 'GangwonEducationSaeum', sans-serif; font-size: 30px; line-height: 36px; 
+            word-break: break-all; resize: none; box-sizing: border-box; outline: none; 
+            background: transparent; color: #444; z-index: 1;
+        }
+        
+        #text-input::placeholder { color: #999; font-family: 'GangwonEducationSaeum', sans-serif; font-size: 30px; line-height: 36px; }
+
+        .submit-btn {
+            margin-top: 25px; padding: 12px 45px; border: none; border-radius: 30px; 
+            background: var(--accent); color: white; font-weight: bold; font-size: 1.6rem; font-family: 'GangwonEducationSaeum', sans-serif;
+            cursor: pointer; box-shadow: 0 8px 25px rgba(255, 142, 139, 0.4); transition: all 0.3s ease; z-index: 10;
+        }
+        .submit-btn:hover { background: var(--accent-hover); transform: translateY(-2px); box-shadow: 0 12px 30px rgba(255, 142, 139, 0.5); }
+        .submit-btn:active { transform: translateY(1px); }
+
+        #options-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.3); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+            display: none; justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95); padding: 30px 25px; border-radius: 25px; text-align: center;
+            width: 290px; box-shadow: 0 25px 60px rgba(0,0,0,0.15); font-family: 'GangwonEducationSaeum', sans-serif;
+        }
+        .modal-content h3 { font-family: 'GangwonEducationSaeum', sans-serif; color: #444; margin-top:0; font-size: 1.8rem; margin-bottom: 20px;}
+        .option-list { display: flex; flex-direction: column; gap: 10px; }
+        .option-btn {
+            padding: 12px; border: 1px solid #f0f0f0; border-radius: 15px;
+            background: #fff; font-weight: bold; cursor: pointer; color: #555; font-size: 1.5rem; 
+            font-family: 'GangwonEducationSaeum', sans-serif; transition: all 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+        .option-btn:hover { background: #fff5f4; border-color: var(--accent); color: var(--accent-hover); transform: translateY(-1px); }
+        .option-btn:active { transform: translateY(1px); }
+        .cancel-btn { margin-top: 5px; background: #f4f4f4; color: #888; border: none; box-shadow: none; }
+        .cancel-btn:hover { background: #ebebeb; color: #666; border-color: transparent; }
+
+        #result-page { z-index: 20; opacity: 0; visibility: hidden; padding: 20px; box-sizing: border-box;}
+        
+        .result-title { font-size: 2rem; color: var(--accent-hover); margin-bottom: 15px; font-family: 'GangwonEducationSaeum', sans-serif; text-align: center; white-space: nowrap; }
+        .result-msg { 
+            font-size: 1.6rem; color: #555; margin-bottom: 25px; font-family: 'GangwonEducationSaeum', sans-serif; text-align: center; 
+            line-height: 1.15; word-break: keep-all; max-width: 340px; background: rgba(255,255,255,0.4); padding: 20px 25px; border-radius: 20px; backdrop-filter: blur(5px);
+        }
+        .result-msg p { margin: 0 0 8px 0; }
+        .result-msg p:last-child { margin-bottom: 0; }
+
+        .btn-group { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 280px; }
+        .result-btn { padding: 14px 0; border: none; border-radius: 30px; font-weight: bold; font-size: 1.5rem; cursor: pointer; transition: all 0.3s ease; font-family: 'GangwonEducationSaeum', sans-serif; }
+        .btn-retry { background: rgba(255,255,255,0.8); color: var(--accent-hover); border: 2px solid var(--accent); }
+        .btn-retry:hover { background: #fff; }
+        .btn-home { background: var(--accent); color: white; box-shadow: 0 8px 25px rgba(255, 142, 139, 0.4); }
+        .btn-home:hover { background: var(--accent-hover); transform: translateY(-2px); }
+
+    </style>
+</head>
+<body>
+
+    <div id="start-page" class="page">
+        <h1>지금 어떤 생각이 당신을 괴롭히고 있나요?</h1>
+        <div id="trashcan-icon-wrapper" onclick="goToGamePage()">
+            <div id="trashcan-emoji">🗑️</div>
+        </div>
+        <div class="description-box">
+            <p>떠오르는 스트레스를 종이로 만들어<br>부수고 버리는 행동을 통해,<br>생각과 나 사이에 건강한 거리를<br>만들어 보세요.</p>
+        </div>
+    </div>
+
+    <div id="game-page" class="page">
+        <button class="top-back-btn" onclick="handleBack()">◀ 뒤로</button>
+
+        <div id="canvas-container">
+            <div id="instruction-toast">안내 멘트</div>
+            <textarea id="text-input" placeholder="없애고 싶은 생각이나 감정을&#10;이곳에 털어놓으세요.&#10;작성한 내용은 저장되지 않습니다"></textarea>
+            <canvas id="main-canvas"></canvas>
+            <canvas id="hidden-texture" style="display:none;"></canvas>
+            <canvas id="crease-hidden" style="display:none;"></canvas>
+        </div>
+        <button id="btn-submit" class="submit-btn" onclick="completeWriting()">✍️ 작성 완료</button>
+    </div>
+
+    <div id="options-modal">
+        <div class="modal-content">
+            <h3>이 기억을 어떻게 처리할까요?</h3>
+            <div class="option-list">
+                <button class="option-btn" onclick="selectAction('tear')">✂️ 산산조각 내기</button>
+                <button class="option-btn" onclick="selectAction('erase')">✏️ 지우개로 지우기</button>
+                <button class="option-btn" onclick="selectAction('burn_ready')">🔥 불 태우기</button>
+                <button class="option-btn" onclick="selectAction('basketball_prep')">🗑️ 구겨서 버리기</button>
+                <button class="option-btn" onclick="selectAction('shred_ready')">🗳️ 파쇄기로 갈기</button>
+                <button class="option-btn cancel-btn" onclick="closeModal()">↩ 마저 작성하기</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="result-page" class="page">
+        <div id="result-status" class="result-title">완료되었습니다</div>
+        <div class="result-msg" id="result-message-box"></div>
+        <div class="btn-group">
+            <button class="result-btn btn-retry" onclick="retryWithOtherMethod()">🔄 다른 방법으로 지우기</button>
+            <button class="result-btn btn-home" onclick="resetToStart()">🏠 처음으로</button>
+        </div>
+    </div>
+
+    <script>
+        const PolygonClipper = (() => {
+            const getIntersection = (A, B, C, D) => {
+                const a1 = B.y - A.y; const b1 = A.x - B.x; const c1 = a1 * A.x + b1 * A.y;
+                const a2 = D.y - C.y; const b2 = C.x - D.x; const c2 = a2 * C.x + b2 * C.y;
+                const det = a1 * b2 - a2 * b1;
+                if (det === 0) return null;
+                const x = (b2 * c1 - b1 * c2) / det; const y = (a1 * c2 - a2 * c1) / det;
+                const minX = Math.min(C.x, D.x) - 0.1; const maxX = Math.max(C.x, D.x) + 0.1;
+                const minY = Math.min(C.y, D.y) - 0.1; const maxY = Math.max(C.y, D.y) + 0.1;
+                if (x >= minX && x <= maxX && y >= minY && y <= maxY) return {x, y};
+                return null;
+            };
+            const splitPolygon = (vertices, A, B) => {
+                const p1 = [], p2 = [];
+                for (let i = 0; i < vertices.length; i++) {
+                    const cur = vertices[i]; const next = vertices[(i + 1) % vertices.length];
+                    const side = (B.x - A.x) * (cur.y - A.y) - (B.y - A.y) * (cur.x - A.x);
+                    if (side >= 0) p1.push(cur); if (side <= 0) p2.push(cur); 
+                    const intersect = getIntersection(A, B, cur, next);
+                    if (intersect) { const distCur = Math.hypot(intersect.x - cur.x, intersect.y - cur.y); const distNext = Math.hypot(intersect.x - next.x, intersect.y - next.y); if (distCur > 0.1 && distNext > 0.1) { p1.push(intersect); p2.push(intersect); } }
+                }
+                if (p1.length >= 3 && p2.length >= 3) return [p1, p2];
+                return null;
+            };
+            return { splitPolygon };
+        })();
+
+        const cw = 300, ch = 420;
+
+        class PaperPiece {
+            constructor(vertices, dx = 0, dy = 0, vx = 0, vy = 0) {
+                this.vertices = vertices; this.dx = dx; this.dy = dy; this.vx = vx; this.vy = vy; this.alpha = 1; 
+                this.delay = 120;
+            }
+            update() {
+                if(this.vx === 0 && this.vy === 0) return;
+                this.delay--; 
+                if (this.delay <= 0) { this.vy += 0.02; this.alpha -= 0.003; } 
+                else { this.vx *= 0.88; this.vy *= 0.88; }
+                const currentX = (cw/2) + this.dx; const currentY = (ch/2) + this.dy;
+                if (currentX < 20) { this.vx = Math.abs(this.vx) * 0.5; this.dx += 1; }
+                if (currentX > cw - 20) { this.vx = -Math.abs(this.vx) * 0.5; this.dx -= 1; }
+                if (currentY < 20) { this.vy = Math.abs(this.vy) * 0.5; this.dy += 1; }
+                this.dx += this.vx; this.dy += this.vy;
+            }
+            draw(ctx, texture) {
+                if (this.alpha <= 0) return; ctx.save(); ctx.globalAlpha = this.alpha; ctx.translate(this.dx, this.dy); ctx.beginPath();
+                this.vertices.forEach((v, i) => { if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y); });
+                ctx.closePath(); ctx.clip(); ctx.drawImage(texture, 0, 0); ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.stroke(); ctx.restore();
+            }
+        }
+
+        const mainCanvas = document.getElementById('main-canvas'); const mainCtx = mainCanvas.getContext('2d');
+        const textureCanvas = document.getElementById('hidden-texture'); const textureCtx = textureCanvas.getContext('2d');
+        const creaseCanvas = document.getElementById('crease-hidden'); const creaseCtx = creaseCanvas.getContext('2d');
+        const input = document.getElementById('text-input'); const modal = document.getElementById('options-modal');
+        
+        let selectedAction = null; let isDrawing = false; let swipeStartX = 0, swipeStartY = 0; let swipeCurrY = 0;
+        let paperPieces = []; let isGameFinished = false; 
+        
+        let totalPiecesCreated = 1; 
+        let lastInteractionTime = Date.now();
+        let initialTextPixels = 0; let eraseThreshold = 0;
+
+        let burnY = 0; let fireParticles = [];
+        let matchX = cw / 2, matchY = ch / 2, lastMatchX = cw / 2, lastMatchY = ch / 2, matchAngle = Math.PI / 4, isLit = false, strikeDistance = 0, igniteX = 0, igniteY = 0, igniteAngle = 0, introTick = 0;
+        let isPinching = false, pinchStartDist = 0, pinchRatio = 1; 
+        let ballX = cw / 2, ballY = ch - 100, ballScale = 0.4, isThrown = false, throwVy = 0, throwVx = 0;
+        let shredProgress = 0, handleAngle = 0, lastShredY = 0;
+
+        mainCanvas.width = cw; mainCanvas.height = ch; textureCanvas.width = cw; textureCanvas.height = ch; creaseCanvas.width = cw; creaseCanvas.height = ch;
+
+        let instructionTimeout = null;
+
+        function drawTrashcanEmoji(ctx, x, y, scale) {
+            ctx.font = `${80 * scale}px Arial`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("🗑️", x, y);
+        }
+
+        function showInstruction(text, duration = 2000) {
+            const toast = document.getElementById('instruction-toast');
+            if (instructionTimeout) { clearTimeout(instructionTimeout); instructionTimeout = null; }
+            if (text) { 
+                toast.innerText = text; toast.classList.add('show'); 
+                instructionTimeout = setTimeout(() => { toast.classList.remove('show'); }, duration);
+            } else { 
+                toast.classList.remove('show'); 
+            }
+        }
+
+        function finishGame(title, delay) {
+            isGameFinished = true; showInstruction(""); 
+            let baseAction = 'trash';
+            if (selectedAction) {
+                if (selectedAction.includes('tear')) baseAction = 'tear';
+                else if (selectedAction.includes('erase')) baseAction = 'erase';
+                else if (selectedAction.includes('burn')) baseAction = 'burn';
+                else if (selectedAction.includes('shred')) baseAction = 'shred';
+                else if (selectedAction.includes('basket')) baseAction = 'trash';
+            }
+            const messages = {
+                'trash': `<p>방금 당신이 시원하게 버린 것은<br>단순한 물건이 아니라, <br>당신의 마음을 짓누르던 <br>무거운 생각들입니다.</p><p>억지로 잊으려 애쓰기보다,<br>이렇게 밖으로 꺼내어 <br>멀리 보내주는 연습이 필요해요.</p><p>생각을 붙잡을지, <br>아니면 오늘처럼 시원하게 보내줄지는<br>언제나 당신이 선택할 수 있습니다.</p>`,
+                'tear': `<p>생각은 내가 아닙니다.<br>내가 어떻게 '다루느냐'에 따라<br>달라지는 대상일 뿐이죠.</p><p>직접 찢어 버리는 이 단순한 행동이,<br>당신과 스트레스 사이에<br>안전한 거리를 만들어 줄 거예요.</p><p>비워진 그자리에<br>내일을 지탱할 평온함이<br>가득 차길 응원합니다.</p>`,
+                'erase': `<p>우리 마음은 컴퓨터의 휴지통처럼<br>자동으로 정리되지 않아서,<br>가끔은 이렇게 직접 지워줘야 합니다.</p><p>상상만 하는 것보다<br>직접 버리는 행동을 할 때,<br>우리 뇌는 비로소<br>'정말 다 끝났다'고<br>안심하거든요.</p><p>마음이 복잡해질 때면<br>언제든 이곳에 와서<br>당신만의 끝맺음을 보여주세요.</p>`,
+                'shred': `<p>형체가 사라지면<br>그 속에 담겼던 아픔도<br>함께 힘을 잃습니다.</p><p>종이를 갈아버리는 과정 속에서<br>당신과 나쁜 감정 사이에<br>안전한 거리가 생겼을 거예요.</p><p>"생각은 내가 아니다"라는<br>사실을 잊지 마세요.</p>`,
+                'burn': `<p>하얀 재처럼 <br>당신의 고민도 이제<br>아무것도 아닌 것이<br>되었습니다.</p><p>머릿속으로만 잊으려 할 때보다<br>직접 손을 움직여 버릴 때<br>마음은 더 빨리 치유되죠.</p><p>꽉 붙잡고 있던<br>나쁜 생각의 손을 놓고,<br>시원하게 태워버린 <br>당신의 용기를 응원합니다.</p>`
+            };
+
+            setTimeout(() => {
+                document.getElementById('result-status').innerText = title;
+                document.getElementById('result-message-box').innerHTML = messages[baseAction];
+                const resultPage = document.getElementById('result-page');
+                resultPage.style.transition = 'opacity 2.5s ease-in-out, visibility 2.5s';
+                document.getElementById('game-page').style.opacity = '0';
+                document.getElementById('game-page').style.visibility = 'hidden';
+                resultPage.style.opacity = '1';
+                resultPage.style.visibility = 'visible';
+            }, delay);
+        }
+
+        // 🔥 똑똑한 뒤로 가기 제어 함수 🔥
+        function handleBack() {
+            if (selectedAction) {
+                // 1. 액션 진행 중 (지우기/태우기 등) -> 취소하고 다시 2번째 페이지(작성 화면)로!
+                resetCanvasContainer();
+                input.style.visibility = 'visible';
+                document.getElementById('btn-submit').style.visibility = 'visible';
+                modal.style.display = 'none';
+            } else if (modal.style.display === 'flex') {
+                // 2. 모달이 켜져 있을 때 -> 모달만 닫기 (2번째 페이지 유지)
+                closeModal();
+            } else {
+                // 3. 아무것도 안 하고 글만 쓰는 중일 때 -> 1번째 페이지(홈)로 이동!
+                resetToStart();
+            }
+        }
+
+        function retryWithOtherMethod() {
+            const resultPage = document.getElementById('result-page');
+            resultPage.style.transition = 'opacity 0.4s, visibility 0.4s'; 
+            resultPage.style.opacity = '0'; resultPage.style.visibility = 'hidden';
+            document.getElementById('game-page').style.opacity = '1';
+            document.getElementById('game-page').style.visibility = 'visible';
+            resetCanvasContainer(); renderTextToTexture(); modal.style.display = 'flex';
+        }
+
+        function resetToStart() {
+            const resultPage = document.getElementById('result-page');
+            resultPage.style.transition = 'opacity 0.4s, visibility 0.4s'; 
+            resultPage.style.opacity = '0'; resultPage.style.visibility = 'hidden';
+            
+            document.getElementById('game-page').style.opacity = '0'; 
+            document.getElementById('game-page').style.visibility = 'hidden';
+            
+            document.getElementById('start-page').style.opacity = '1';
+            document.getElementById('start-page').style.visibility = 'visible';
+            
+            modal.style.display = 'none';
+            resetCanvasContainer();
+            input.value = ''; input.style.visibility = 'visible';
+            document.getElementById('btn-submit').style.visibility = 'visible';
+        }
+
+        function resetCanvasContainer() {
+            const cont = document.getElementById('canvas-container');
+            cont.style.transition = "none"; cont.style.transform = "none"; cont.style.opacity = "1";
+            cont.style.background = "rgba(255, 255, 255, 0.7)";
+            cont.style.backgroundImage = "repeating-linear-gradient(transparent, transparent 35px, rgba(0,0,0,0.06) 35px, rgba(0,0,0,0.06) 36px)";
+            cont.style.boxShadow = "0 20px 50px rgba(0,0,0,0.08)";
+            mainCtx.globalCompositeOperation = 'source-over'; mainCtx.clearRect(0, 0, cw, ch);
+            showInstruction("");
+            selectedAction = null; isGameFinished = false; 
+            totalPiecesCreated = 1; lastInteractionTime = Date.now();
+            
+            // 모든 애니메이션 요소 완전 초기화
+            paperPieces = []; fireParticles = []; isLit = false; isThrown = false; shredProgress = 0;
+        }
+
+        function renderTextToTexture() {
+            const scrollY = input.scrollTop;
+            textureCtx.clearRect(0, 0, cw, ch); textureCtx.fillStyle = "#444"; 
+            textureCtx.font = "30px 'GangwonEducationSaeum', sans-serif"; textureCtx.textBaseline = "alphabetic";
+            let currentY = 34 - scrollY; 
+            input.value.split('\n').forEach(para => {
+                currentY = wrapText(textureCtx, para, 25, currentY, cw - 50, 36); currentY += 36; 
+            });
+        }
+
+        function wrapText(context, text, x, y, maxWidth, lineHeight) {
+            let words = text.split(''); let line = '';
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n];
+                if (context.measureText(testLine).width > maxWidth && n > 0) { context.fillText(line, x, y); line = words[n]; y += lineHeight; } else { line = testLine; }
+            }
+            context.fillText(line, x, y); return y; 
+        }
+
+        function goToGamePage() {
+            document.getElementById('start-page').style.opacity = '0'; document.getElementById('start-page').style.visibility = 'hidden'; 
+            document.getElementById('game-page').style.opacity = '1'; document.getElementById('game-page').style.visibility = 'visible';
+            input.focus(); input.blur();
+        }
+
+        function completeWriting() {
+            if(input.value.trim() === "") return alert("내용을 입력해주세요.");
+            renderTextToTexture();
+            input.style.visibility = 'hidden'; document.getElementById('btn-submit').style.visibility = 'hidden'; modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+            input.style.visibility = 'visible';
+            document.getElementById('btn-submit').style.visibility = 'visible';
+        }
+
+        function bakePaperIntoCanvas() {
+            const cont = document.getElementById('canvas-container');
+            cont.style.background = "transparent"; cont.style.boxShadow = "none";
+            const tempCanvas = document.createElement('canvas'); tempCanvas.width = cw; tempCanvas.height = ch; const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.fillStyle = "rgba(255, 255, 255, 0.85)"; tempCtx.fillRect(0,0,cw,ch);
+            const scrollY = input.scrollTop;
+            tempCtx.fillStyle = "rgba(0, 0, 0, 0.06)"; 
+            for(let y = 35 - (scrollY % 36); y < ch + 36; y += 36) { tempCtx.fillRect(0, y, cw, 1); }
+            tempCtx.drawImage(textureCanvas, 0, 0);
+            textureCtx.clearRect(0, 0, cw, ch); textureCtx.drawImage(tempCanvas, 0, 0);
+        }
+
+        function precomputeCreaseTexture() {
+            creaseCtx.clearRect(0, 0, cw, ch); creaseCtx.strokeStyle = "rgba(0, 0, 0, 0.15)"; creaseCtx.lineWidth = 1;
+            for(let i=0; i<80; i++) {
+                let sX = Math.random() * cw; let sY = Math.random() * ch; creaseCtx.beginPath(); creaseCtx.moveTo(sX, sY);
+                let steps = Math.random() * 8 + 4; for(let j=0; j<steps; j++) { creaseCtx.lineTo(sX + (Math.random()-0.5)*80, sY + (Math.random()-0.5)*80); } creaseCtx.stroke();
+            }
+        }
+
+        function selectAction(type) {
+            selectedAction = type; modal.style.display = 'none'; isGameFinished = false;
+            
+            if(type === 'tear') {
+                bakePaperIntoCanvas(); paperPieces = [new PaperPiece([ {x:0,y:0},{x:cw,y:0},{x:cw,y:ch},{x:0,y:ch} ], 0, 0, 0, 0)]; 
+                totalPiecesCreated = 1; lastInteractionTime = Date.now();
+                showInstruction("화면을 마구 그어 종이를 찢으세요! ✂️"); gameLoop(); 
+            } else if(type === 'erase') {
+                resetCanvasContainer(); mainCtx.drawImage(textureCanvas, 0, 0); selectedAction = 'erase'; 
+                const imgData = mainCtx.getImageData(0, 0, cw, ch).data; initialTextPixels = 0;
+                for (let i = 3; i < imgData.length; i += 4 * 10) { if (imgData[i] > 10) initialTextPixels++; }
+                eraseThreshold = initialTextPixels * 0.15; 
+                showInstruction("글자를 손가락으로 문질러 지우세요✏️"); gameLoop(); 
+            } else if(type === 'burn_ready') {
+                bakePaperIntoCanvas(); matchX = cw / 2; matchY = ch / 2; matchAngle = Math.PI / 4; isLit = false; strikeDistance = 0; fireParticles = []; 
+                selectedAction = 'burn_ready'; showInstruction("화면을 짧게 그어 불을 붙이세요! 🧨"); gameLoop();
+            } else if(type === 'basketball_prep') {
+                bakePaperIntoCanvas(); pinchRatio = 1; isPinching = false; precomputeCreaseTexture(); triggerVibration(); 
+                selectedAction = 'basketball_prep'; showInstruction("아래로 드래그하거나 두 손가락으로 구기세요! ✊"); gameLoop();
+            } else if(type === 'shred_ready') {
+                bakePaperIntoCanvas(); shredProgress = 0; handleAngle = 0; triggerVibration(); 
+                selectedAction = 'shred_ready'; showInstruction("오른쪽 손잡이를 위아래로 돌리세요🗳️"); gameLoop();
+            }
+        }
+
+        function triggerVibration(ms = 20) { if (window.navigator && window.navigator.vibrate) window.navigator.vibrate(ms); }
+        function getMousePos(e) { const rect = mainCanvas.getBoundingClientRect(); const clientX = e.touches ? e.touches[0].clientX : e.clientX; const clientY = e.touches ? e.touches[0].clientY : e.clientY; return { x: clientX - rect.left, y: clientY - rect.top }; }
+
+        function handleStart(e) { 
+            if(!selectedAction) return; if(e.cancelable) e.preventDefault(); 
+            isDrawing = true; const pos = getMousePos(e); swipeStartX = pos.x; swipeStartY = pos.y; swipeCurrY = pos.y; lastInteractionTime = Date.now();
+            if (selectedAction === 'burn_ready') { selectedAction = 'burn_striking'; matchX = pos.x; matchY = pos.y; lastMatchX = pos.x; lastMatchY = pos.y; strikeDistance = 0; } 
+            else if (selectedAction === 'basketball_prep' && e.touches && e.touches.length === 2) { isPinching = true; pinchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); }
+            else if (selectedAction === 'basketball_throw') { swipeStartY = pos.y; showInstruction(""); }
+            else if (selectedAction === 'shred_ready') { selectedAction = 'shred_striking'; lastShredY = pos.y; strikeDistance = 0; }
+        }
+
+        function handleMove(e) {
+            if(!selectedAction || isGameFinished) return; if(e.cancelable) e.preventDefault(); const currPos = getMousePos(e);
+            if (isDrawing) lastInteractionTime = Date.now();
+            if(isDrawing && selectedAction === 'erase') {
+                mainCtx.globalCompositeOperation = 'destination-out'; mainCtx.lineWidth = 60; mainCtx.lineCap = 'round'; mainCtx.lineJoin = 'round';
+                mainCtx.beginPath(); mainCtx.moveTo(swipeStartX, swipeStartY); mainCtx.lineTo(currPos.x, currPos.y); mainCtx.stroke();
+                swipeStartX = currPos.x; swipeStartY = currPos.y; triggerVibration(5);
+            } 
+            else if(isDrawing && selectedAction === 'tear') {
+                const dist = Math.hypot(currPos.x - swipeStartX, currPos.y - swipeStartY);
+                if(dist > 40) { executeCut(swipeStartX, swipeStartY, currPos.x, currPos.y); swipeStartX = currPos.x; swipeStartY = currPos.y; }
+            } 
+            else if(isDrawing && selectedAction === 'burn_striking') {
+                let dx = currPos.x - lastMatchX; let dy = currPos.y - lastMatchY; let moveDist = Math.hypot(dx, dy); matchX = currPos.x; matchY = currPos.y;
+                if (moveDist > 2) matchAngle = (dx > 0 ? 1 : -1) * Math.PI / 6; strikeDistance += moveDist; lastMatchX = currPos.x; lastMatchY = currPos.y;
+                if (Math.floor(strikeDistance / 20) > Math.floor((strikeDistance - moveDist) / 20)) { triggerVibration(5); fireParticles.push({ x: matchX, y: matchY, vx: (Math.random() - 0.5), vy: -Math.random() - 1, life: 1, size: Math.random() * 3 + 2, color: '#fbc531' }); }
+                if (strikeDistance > 60) { 
+                    isLit = true; triggerVibration(50); showInstruction(""); 
+                    for(let i=0; i<15; i++) fireParticles.push({ x: matchX, y: matchY, vx: (Math.random() - 0.5) * 8, vy: (Math.random() - 0.5) * 8, life: 1, size: Math.random() * 6 + 3, color: '#ff7571' });
+                    igniteX = matchX; igniteY = matchY; igniteAngle = matchAngle; selectedAction = 'burn_drop'; introTick = 0; isDrawing = false;
+                }
+            } else if (selectedAction === 'basketball_prep' && isDrawing) {
+                if (e.touches && e.touches.length === 2) {
+                    let currentDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                    if(pinchStartDist > 0) { pinchRatio = currentDist / pinchStartDist; if(pinchRatio > 1.0) pinchRatio = 1.0; if(pinchRatio < 0.4) pinchRatio = 0.4; }
+                } else { let dy = currPos.y - swipeStartY; if (dy > 0) { pinchRatio = 1.0 - (dy / 200); if (pinchRatio < 0.4) pinchRatio = 0.4; } }
+            } else if (selectedAction === 'basketball_throw' && !isThrown) { swipeCurrY = currPos.y; ballX = currPos.x;
+            } else if (isDrawing && selectedAction === 'shred_striking') { let dy = currPos.y - lastShredY; if(Math.abs(dy) > 3) { handleAngle += dy * 0.05; shredProgress += Math.abs(dy) * 0.5; lastShredY = currPos.y; triggerVibration(10); if (shredProgress > 10) showInstruction(""); } }
+        }
+
+        function handleEnd(e) { 
+            isDrawing = false; lastInteractionTime = Date.now();
+            if(selectedAction === 'erase' && !isGameFinished) checkEraseComplete();
+            if(selectedAction === 'burn_striking') { selectedAction = 'burn_ready'; strikeDistance = 0; }
+            if(selectedAction === 'shred_striking') { selectedAction = 'shred_ready'; }
+            if(selectedAction === 'basketball_prep') { isPinching = false; pinchStartDist = 0; if (pinchRatio > 0.4) pinchRatio = 1.0; }
+            if(selectedAction === 'basketball_throw' && !isThrown) { let dy = swipeStartY - swipeCurrY; if (dy > 40) { isThrown = true; throwVy = Math.max(-25, -15 - (dy * 0.1)); throwVx = (ballX - cw/2) * 0.08; triggerVibration(); showInstruction(""); } else { ballX = cw/2; } }
+        }
+
+        function executeCut(startX, startY, endX, endY) {
+            let slicedSucceeded = false; const newPieces = [];
+            for (let i = paperPieces.length - 1; i >= 0; i--) {
+                const p = paperPieces[i]; const localA = { x: startX - p.dx, y: startY - p.dy }; const localB = { x: endX - p.dx, y: endY - p.dy };
+                const result = PolygonClipper.splitPolygon(p.vertices, localA, localB);
+                if (result) {
+                    slicedSucceeded = true; paperPieces.splice(i, 1);
+                    const sliceDx = endX - startX; const sliceDy = endY - startY; const len = Math.hypot(sliceDx, sliceDy);
+                    const pushX = -(sliceDy / len) * 1.5; const pushY = (sliceDx / len) * 1.5;
+                    newPieces.push(new PaperPiece(result[0], p.dx, p.dy, p.vx + pushX, p.vy + pushY)); newPieces.push(new PaperPiece(result[1], p.dx, p.dy, p.vx - pushX, p.vy - pushY));
+                }
+            }
+            if (slicedSucceeded) { paperPieces.push(...newPieces); totalPiecesCreated += newPieces.length / 2; triggerVibration(10); showInstruction(""); }
+            if(totalPiecesCreated >= 500 && !isGameFinished) { finishGame("기억은 먼지가 되었습니다", 1500); }
+        }
+
+        function checkEraseComplete() {
+            const imageData = mainCtx.getImageData(0, 0, cw, ch).data; let textPixels = 0;
+            for (let i = 3; i < imageData.length; i += 4 * 10) { if (imageData[i] > 10) textPixels++; }
+            if (textPixels <= eraseThreshold && !isGameFinished) { finishGame("깨끗하게 지워졌습니다", 300); }
+        }
+
+        function drawShredderGraphic(ctx, angle) {
+            const sy = 260; ctx.fillStyle = "#e8e8e8"; ctx.beginPath(); ctx.roundRect(15, sy, cw-30, 60, 10); ctx.fill(); ctx.fillStyle = "rgba(255, 255, 255, 0.4)"; ctx.fillRect(25, sy+40, cw-50, 150); ctx.fillStyle = "#666"; ctx.beginPath(); ctx.roundRect(35, sy+15, cw-70, 12, 6); ctx.fill(); ctx.save(); ctx.translate(cw-20, sy+30); ctx.rotate(angle); ctx.fillStyle = "#ccc"; ctx.fillRect(0,-4,30,8); ctx.fillStyle = "#aaa"; ctx.beginPath(); ctx.ellipse(30,0,6,10,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+        }
+
+        function drawSpikyFire(ctx, baseY, heightMult, color, timeOffset) {
+            let time = Date.now() * 0.015; ctx.beginPath(); ctx.moveTo(0, baseY);
+            for(let x=0; x<=cw; x+=24) { let noise = Math.sin(x * 0.15 + time + timeOffset) * Math.cos(x * 0.05 - time) * 0.5 + 0.5; let spikeHeight = noise * heightMult + Math.random() * 10; ctx.lineTo(x + 12, baseY - spikeHeight); ctx.lineTo(x + 24, baseY + Math.random() * 5); }
+            ctx.lineTo(cw, ch+50); ctx.lineTo(0, ch+50); ctx.fillStyle = color; ctx.fill();
+        }
+
+        function drawMatch(ctx, x, y, angle, isLit) {
+            ctx.save(); ctx.translate(x, y); ctx.rotate(angle); ctx.fillStyle = "#d1ccc0"; ctx.fillRect(-3, 0, 6, 80); ctx.fillStyle = isLit ? "#2c3e50" : "#eb4d4b"; ctx.beginPath(); ctx.ellipse(0, 0, 5, 8, 0, 0, Math.PI * 2); ctx.fill();
+            if(isLit) { let time = Date.now() * 0.02, flicker = Math.random() * 5; ctx.fillStyle = "rgba(255, 140, 0, 0.9)"; ctx.beginPath(); ctx.moveTo(0, -35 - flicker); ctx.quadraticCurveTo(15, -10, 5, 5); ctx.quadraticCurveTo(0, 10, -5, 5); ctx.quadraticCurveTo(-15, -10, 0, -35 - flicker); ctx.fill(); ctx.fillStyle = "rgba(255, 200, 50, 0.95)"; ctx.beginPath(); ctx.moveTo(0, -20 - flicker*0.5); ctx.quadraticCurveTo(8, -5, 3, 3); ctx.quadraticCurveTo(0, 6, -3, 3); ctx.quadraticCurveTo(-8, -5, 0, -20 - flicker*0.5); ctx.fill(); }
+            ctx.restore();
+        }
+
+        function drawCrumpledBall(ctx, x, y, scale) {
+            ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale); ctx.beginPath();
+            if (scale < 0.98) {
+                let rX = (cw/2) * scale; let rY = (ch/2) * scale; let points = 40;
+                for(let i=0; i<points; i++) {
+                    let a = (i/points) * Math.PI * 2; let noise = Math.sin(a * 5) * 10 * (1-scale) + Math.cos(a * 13) * 15 * (1-scale);
+                    let currentRx = rX + noise - (cw/2 - 120) * (1-scale); let currentRy = rY + noise - (ch/2 - 120) * (1-scale);
+                    let px = Math.cos(a) * Math.max(20, currentRx); let py = Math.sin(a) * Math.max(20, currentRy);
+                    if(i===0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+                }
+            } else { ctx.rect(-cw/2, -ch/2, cw, ch); }
+            ctx.closePath(); ctx.clip(); ctx.fillStyle = "rgba(255, 255, 255, 0.85)"; ctx.fillRect(-cw/2, -ch/2, cw, ch); ctx.fillStyle = "rgba(0,0,0,0.06)"; 
+            for(let yy = -ch/2 + 35; yy < ch/2 + 36; yy += 36) ctx.fillRect(-cw/2, yy, cw, 1);
+            ctx.drawImage(textureCanvas, -cw/2, -ch/2); 
+            if(scale < 0.98) { ctx.globalAlpha = Math.min((1-scale)*2.0, 1.0); ctx.drawImage(creaseCanvas, -cw/2, -ch/2); let innerShadow = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(50, cw/2 * scale)); innerShadow.addColorStop(0, "rgba(0,0,0,0)"); innerShadow.addColorStop(1, "rgba(0,0,0," + (1-scale)*0.6 + ")"); ctx.fillStyle = innerShadow; ctx.fill(); } 
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            if(!selectedAction) return; requestAnimationFrame(gameLoop);
+            if(selectedAction === 'tear') {
+                mainCtx.clearRect(0, 0, cw, ch); for (let i = paperPieces.length - 1; i >= 0; i--) { const piece = paperPieces[i]; piece.update(); piece.draw(mainCtx, textureCanvas); if (piece.alpha <= 0 || piece.dy > 1200) paperPieces.splice(i, 1); }
+                if (totalPiecesCreated > 1 && !isDrawing && !isGameFinished) { if (Date.now() - lastInteractionTime > 800) { finishGame("기억은 먼지가 되었습니다", 1000); } }
+            } 
+            else if (selectedAction === 'burn_ready' || selectedAction === 'burn_striking') {
+                mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); 
+                for(let i=fireParticles.length-1; i>=0; i--) { let p = fireParticles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.05; if(p.life <= 0) fireParticles.splice(i, 1); else { mainCtx.globalAlpha = p.life; mainCtx.fillStyle = p.color; mainCtx.beginPath(); mainCtx.arc(p.x, p.y, p.size, 0, Math.PI*2); mainCtx.fill(); } }
+                mainCtx.globalAlpha = 1; drawMatch(mainCtx, matchX, matchY, matchAngle, isLit);
+            }
+            else if (selectedAction === 'burn_drop') {
+                mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); introTick++; let p = introTick / 30; if (p > 1) p = 1; matchX = igniteX * (1-p) + (cw/2) * p; matchY = igniteY * (1-p) + (ch - 10) * p; matchAngle = igniteAngle * (1-p) + Math.PI * p;
+                if(Math.random() > 0.4) fireParticles.push({ x: matchX, y: matchY, vx: (Math.random() - 0.5) * 3, vy: -Math.random() * 3 - 1, life: 1, size: Math.random() * 4 + 2, color: '#ff7571' });
+                if (introTick >= 35) { triggerVibration(40); selectedAction = 'burn'; burnY = ch - 15; fireParticles = []; return; }
+                for(let i=fireParticles.length-1; i>=0; i--) { let p = fireParticles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.05; if(p.life <= 0) fireParticles.splice(i, 1); else { mainCtx.globalAlpha = p.life; mainCtx.fillStyle = p.color; mainCtx.beginPath(); mainCtx.arc(p.x, p.y, p.size, 0, Math.PI*2); mainCtx.fill(); } }
+                mainCtx.globalAlpha = 1; drawMatch(mainCtx, matchX, matchY, matchAngle, true);
+            }
+            else if (selectedAction === 'basketball_prep') { mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; drawCrumpledBall(mainCtx, cw/2, ch/2, pinchRatio); if (pinchRatio <= 0.4) { triggerVibration(50); selectedAction = 'basketball_throw'; ballX = cw/2; ballY = ch-100; ballScale = 0.4; isThrown = false; swipeStartY = 0; swipeCurrY = 0; showInstruction("위로 휙! 스와이프해서 던지세요 👆"); } }
+            else if (selectedAction === 'basketball_throw') {
+                mainCtx.clearRect(0, 0, cw, ch); drawTrashcanEmoji(mainCtx, cw / 2, 100, 1);
+                if (isThrown) {
+                    ballY += throwVy; ballX += throwVx; ballScale -= 0.005; if (ballScale < 0.15) ballScale = 0.15; if (ballY < 200) ballX += (cw/2 - ballX) * 0.2;
+                    if (ballY <= 120 && Math.abs(ballX - cw / 2) < 40) { if (!isGameFinished) { triggerVibration(40); finishGame("쓰레기통에 버려졌습니다", 500); } }
+                    else if ((ballY < -20 || ballX < -20 || ballX > cw + 20) && !isGameFinished) { isThrown = false; ballX = cw/2; ballY = ch-100; ballScale = 0.4; showInstruction("아까비! 다시 위로 휙 던져보세요 👆"); }
+                }
+                if (!isGameFinished) { drawCrumpledBall(mainCtx, ballX, ballY, ballScale); }
+            }
+            else if (selectedAction === 'shred_ready' || selectedAction === 'shred_striking') {
+                mainCtx.clearRect(0, 0, cw, ch); const entY = 275; const pSc = 0.6; const pW = cw*pSc; const offX = (cw - pW) / 2; let shreddedLen = shredProgress + (ch * pSc) - entY;
+                if (shreddedLen > 0) { for(let x=0; x<pW; x+=4) { mainCtx.save(); mainCtx.beginPath(); mainCtx.rect(offX+x+Math.sin(x+Date.now()*0.005)*1.5, entY, 3, ch - entY); mainCtx.clip(); mainCtx.translate(offX, shredProgress); mainCtx.scale(pSc, pSc); mainCtx.drawImage(textureCanvas, 0, 0); mainCtx.restore(); } }
+                drawShredderGraphic(mainCtx, handleAngle);
+                if (shredProgress < entY) { mainCtx.save(); mainCtx.beginPath(); mainCtx.rect(offX, 0, pW, entY); mainCtx.clip(); mainCtx.translate(offX, shredProgress); mainCtx.scale(pSc, pSc); mainCtx.drawImage(textureCanvas, 0, 0); mainCtx.restore(); }
+                if (shredProgress >= entY + 20 && !isGameFinished) { finishGame("파쇄가 완료되었습니다", 500); }
+            }
+            else if (selectedAction === 'burn') {
+                mainCtx.clearRect(0, 0, cw, ch); mainCtx.globalCompositeOperation = 'source-over'; mainCtx.drawImage(textureCanvas, 0, 0); burnY -= 3.0; 
+                drawSpikyFire(mainCtx, burnY - 10, 25, "rgba(20, 10, 5, 0.95)", 0); drawSpikyFire(mainCtx, burnY - 5, 35, "rgba(220, 50, 50, 0.9)", 100); drawSpikyFire(mainCtx, burnY + 2, 40, "rgba(255, 140, 0, 0.95)", 200); drawSpikyFire(mainCtx, burnY + 8, 45, "rgba(255, 200, 50, 0.98)", 300);  
+                mainCtx.globalCompositeOperation = 'destination-out'; drawSpikyFire(mainCtx, burnY + 15, 30, "black", 150); mainCtx.globalCompositeOperation = 'source-over'; 
+                if (burnY > -50) { let pType = Math.random(); let pColor = pType > 0.5 ? '#e84118' : (pType > 0.2 ? '#fbc531' : '#2f3640'); fireParticles.push({ x: Math.random() * cw, y: burnY - 40 + Math.random() * 15, vx: (Math.random() - 0.5) * 2, vy: -Math.random() * 4 - 3, life: 1, size: Math.random() * 10 + 8, color: pColor }); } 
+                for(let i=fireParticles.length-1; i>=0; i--) { let p = fireParticles[i]; p.x += p.vx; p.y += p.vy; p.life -= 0.03; if(p.life <= 0) fireParticles.splice(i, 1); else { mainCtx.save(); mainCtx.globalAlpha = p.life; mainCtx.translate(p.x, p.y); mainCtx.fillStyle = p.color; mainCtx.beginPath(); mainCtx.moveTo(0, -p.size * 1.5); mainCtx.quadraticCurveTo(p.size, -p.size * 0.5, p.size, p.size * 0.5); mainCtx.quadraticCurveTo(0, p.size * 1.2, -p.size, p.size * 0.5); mainCtx.quadraticCurveTo(-p.size, -p.size * 0.5, 0, -p.size * 1.5); mainCtx.fill(); mainCtx.restore(); } } 
+                mainCtx.globalAlpha = 1; if (burnY < -80 && !isGameFinished) { finishGame("재가 되어 사라졌습니다", 0); }
+            }
+        }
+
+        window.addEventListener('mousedown', handleStart); mainCanvas.addEventListener('touchstart', handleStart, {passive:false});
+        window.addEventListener('mousemove', handleMove, {passive:false}); window.addEventListener('touchmove', handleMove, {passive:false});
+        window.addEventListener('mouseup', handleEnd); window.addEventListener('touchend', handleEnd);
+    </script>
+</body>
+</html>
